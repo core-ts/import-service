@@ -1,0 +1,30 @@
+{
+  "name": "import-service",
+  "version": "0.1.0",
+  "description": "import-service",
+  "main": "./lib/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build:lib": "tsc",
+    "clean:lib": "rimraf lib"
+  },
+  "devDependencies": {
+    "tslint": "5.10.0",
+    "typescript": "^3.3.3333"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com/core-ts/import-service"
+  },
+  "keywords": [
+    "importer",
+    "import",
+    "import-service",
+    "import-core",
+    "ETL",
+    "etl"
+  ]
+}
