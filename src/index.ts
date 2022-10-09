@@ -1,6 +1,6 @@
 import { once } from 'events';
-import fs from 'fs';
-import readline from 'readline';
+import * as fs from 'fs';
+import * as readline from 'readline';
 
 export type DataType = 'ObjectId' | 'date' | 'datetime' | 'time'
   | 'boolean' | 'number' | 'integer' | 'string' | 'text'
@@ -57,6 +57,11 @@ export interface Result {
   total: number;
   success: number;
 }
+interface TmpResult {
+  total: number;
+  success: number;
+  i: number;
+}
 export interface Transformer<T> {
   transform: (data: string) => Promise<T>;
 }
@@ -73,17 +78,22 @@ export interface ErrHandler<T> {
 export interface ExHandler {
   handleException(rs: string, err: any, i?: number, filename?: string): void;
 }
+export interface ImportManager {
+  filename: string;
+  read: readline.Interface;
+  import(): Promise<Result>;
+}
 export class Importer<T> {
   constructor(
-    private skip: number,
-    private filename: string,
-    private read: readline.Interface,
-    private transform: (data: string) => Promise<T>,
-    private write: (obj: T) => Promise<number>,
-    private flush?: () => Promise<number>,
-    private validate?: ((obj: T) => Promise<ErrorMessage[]>),
-    private handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
-    private handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
+    public skip: number,
+    public filename: string,
+    public read: readline.Interface,
+    public transform: (data: string) => Promise<T>,
+    public write: (obj: T) => Promise<number>,
+    public flush?: () => Promise<number>,
+    public validate?: ((obj: T) => Promise<ErrorMessage[]>),
+    public handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
+    public handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
   ) {
     this.import = this.import.bind(this);
     this.transformAndWrite = this.transformAndWrite.bind(this);
@@ -94,41 +104,25 @@ export class Importer<T> {
     let success = 0;
     const v = this.validate;
     let lineSkiped = 0;
-    let lastLine = '';
+    const lastLine = '';
     if (v) {
       let i = 0;
-      for await (const _line of this.read) {
-        ++lineSkiped;
-        if (this.skip === lineSkiped) {
-          for await (const line of this.read) {
-            lastLine = line;
-            total++;
-            let r = 0;
-            try {
-              r = await this.validateAndWrite(line, v, i++);
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.handleException) {
-                this.handleException(line, err, i, this.filename);
-              }
-            }
+      if (this.skip > 0) {
+        for await (const _line of this.read) {
+          ++lineSkiped;
+          if (this.skip === lineSkiped) {
+            const r = await this.validateAndWrite(lastLine, total, v, i);
+            total = r.total;
+            success = r.success;
+            i = r.i;
+            break;
           }
-          if (this.flush) {
-            try {
-              const r = await this.flush();
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.handleException) {
-                this.handleException(lastLine, err, i, this.filename);
-              }
-            }
-          }
-          break;
         }
+      } else {
+        const r = await this.validateAndWrite(lastLine, total, v, i);
+        total = r.total;
+        success = r.success;
+        i = r.i;
       }
       return { total, success };
     } else {
@@ -136,116 +130,137 @@ export class Importer<T> {
       for await (const _line of this.read) {
         ++lineSkiped;
         i++;
-        if (this.skip === lineSkiped) {
-          for await (const line of this.read) {
-            lastLine = line;
-            i++;
-            total++;
-            let r = 0;
-            try {
-              r = await this.transformAndWrite(line);
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.handleException) {
-                this.handleException(line, err, i, this.filename);
-              }
-            }
+        if (this.skip) {
+          if (this.skip === lineSkiped) {
+            const r = await this.transformAndWrite(lastLine, total, i);
+            total = r.total;
+            success = r.success;
+            i = r.i;
+            break;
           }
-          if (this.flush) {
-            try {
-              const r = await this.flush();
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.handleException) {
-                this.handleException(lastLine, err, i, this.filename);
-              }
-            }
-          }
+        } else {
+          const r = await this.transformAndWrite(lastLine, total, i);
+          total = r.total;
+          success = r.success;
+          i = r.i;
           break;
         }
       }
       return { total, success };
     }
   }
-  async transformAndWrite(data: string): Promise<number> {
-    const rs: T = await this.transform(data);
-    const r = await this.write(rs);
-    return r;
-  }
-  async validateAndWrite(data: string, validate: ((obj: T) => Promise<ErrorMessage[]>), line: number): Promise<number> {
-    const rs: T = await this.transform(data);
-    const errors = await validate(rs);
-    if (errors && errors.length > 0) {
-      if (this.handleError) {
-        this.handleError(rs, errors, line, this.filename);
+  private async validateAndWrite(lastLine: string, total: number, validate: ((obj: T) => Promise<ErrorMessage[]>), i: number): Promise<TmpResult> {
+    let success = 0;
+    for await (const line of this.read) {
+      lastLine = line;
+      total++;
+      try {
+        const rs: T = await this.transform(line);
+        const errors = await validate(rs);
+        if (errors && errors.length > 0) {
+          if (this.handleError) {
+            this.handleError(rs, errors, i++, this.filename);
+          }
+        } else {
+          const r = await this.write(rs);
+          if (r > 0) {
+            success = success + r;
+          }
+          i++;
+        }
+      } catch (err) {
+        if (this.handleException) {
+          this.handleException(line, err, i++, this.filename);
+        }
       }
-      return 0;
-    } else {
-      const r = await this.write(rs);
-      return r;
     }
+    if (this.flush) {
+      try {
+        const r = await this.flush();
+        if (r > 0) {
+          success = success + r;
+        }
+      } catch (err) {
+        if (this.handleException) {
+          this.handleException(lastLine, err, i, this.filename);
+        }
+      }
+    }
+    return { total, success, i };
+  }
+  private async transformAndWrite(lastLine: string, total: number, i: number): Promise<TmpResult> {
+    let success = 0;
+    for await (const line of this.read) {
+      lastLine = line;
+      i++;
+      total++;
+      try {
+        const rs: T = await this.transform(line);
+        const r = await this.write(rs);
+        if (r > 0) {
+          success = success + r;
+        }
+      } catch (err) {
+        if (this.handleException) {
+          this.handleException(line, err, i, this.filename);
+        }
+      }
+    }
+    if (this.flush) {
+      try {
+        const r = await this.flush();
+        if (r > 0) {
+          success = success + r;
+        }
+      } catch (err) {
+        if (this.handleException) {
+          this.handleException(lastLine, err, i, this.filename);
+        }
+      }
+    }
+    return { total, success, i };
   }
 }
 // tslint:disable-next-line:max-classes-per-file
 export class ImportService<T> {
   constructor(
-    private skip: number,
-    private filename: string,
-    private read: readline.Interface,
-    private transformer: Transformer<T>,
-    private writer: Writer<T>,
-    private validator: Validator<T>,
-    private errorHandler?: ErrHandler<T>,
-    private exceptionHandler?: ExHandler,
+    public skip: number,
+    public filename: string,
+    public read: readline.Interface,
+    public transformer: Transformer<T>,
+    public writer: Writer<T>,
+    public validator?: Validator<T>,
+    public errorHandler?: ErrHandler<T>,
+    public exceptionHandler?: ExHandler,
   ) {
     this.import = this.import.bind(this);
-    this.transformAndWrite = this.transformAndWrite.bind(this);
     this.validateAndWrite = this.validateAndWrite.bind(this);
+    this.transformAndWrite = this.transformAndWrite.bind(this);
   }
   async import(): Promise<Result> {
     let total = 0;
     let success = 0;
     const v = this.validator;
     let lineSkiped = 0;
-    let lastLine = '';
+    const lastLine = '';
     if (v) {
       let i = 0;
-      for await (const _line of this.read) {
-        ++lineSkiped;
-        if (this.skip === lineSkiped) {
-          for await (const line of this.read) {
-            lastLine = line;
-            total++;
-            let r = 0;
-            try {
-              r = await this.validateAndWrite(line, v, i++);
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.exceptionHandler) {
-                this.exceptionHandler.handleException(line, err, i, this.filename);
-              }
-            }
+      if (this.skip > 0) {
+        for await (const _line of this.read) {
+          ++lineSkiped;
+          if (this.skip === lineSkiped) {
+            const r = await this.validateAndWrite(lastLine, total, v, i);
+            total = r.total;
+            success = r.success;
+            i = r.i;
+            break;
           }
-          if (this.writer.flush) {
-            try {
-              const r = await this.writer.flush();
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.exceptionHandler) {
-                this.exceptionHandler.handleException(lastLine, err, i, this.filename);
-              }
-            }
-          }
-          break;
         }
+      } else {
+        const r = await this.validateAndWrite(lastLine, total, v, i);
+        total = r.total;
+        success = r.success;
+        i = r.i;
       }
       return { total, success };
     } else {
@@ -253,58 +268,95 @@ export class ImportService<T> {
       for await (const _line of this.read) {
         ++lineSkiped;
         i++;
-        if (this.skip === lineSkiped) {
-          for await (const line of this.read) {
-            lastLine = line;
-            i++;
-            total++;
-            let r = 0;
-            try {
-              r = await this.transformAndWrite(line);
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.exceptionHandler) {
-                this.exceptionHandler.handleException(line, err, i, this.filename);
-              }
-            }
+        if (this.skip) {
+          if (this.skip === lineSkiped) {
+            const r = await this.transformAndWrite(lastLine, total, i);
+            total = r.total;
+            success = r.success;
+            i = r.i;
+            break;
           }
-          if (this.writer.flush) {
-            try {
-              const r = await this.writer.flush();
-              if (r > 0) {
-                success = success + r;
-              }
-            } catch (err) {
-              if (this.exceptionHandler) {
-                this.exceptionHandler.handleException(lastLine, err, i, this.filename);
-              }
-            }
-          }
+        } else {
+          const r = await this.transformAndWrite(lastLine, total, i);
+          total = r.total;
+          success = r.success;
+          i = r.i;
           break;
         }
       }
       return { total, success };
     }
   }
-  async transformAndWrite(data: string): Promise<number> {
-    const rs: T = await this.transformer.transform(data);
-    const r = await this.writer.write(rs);
-    return r;
-  }
-  async validateAndWrite(data: string, validator: Validator<T>, line: number): Promise<number> {
-    const rs: T = await this.transformer.transform(data);
-    const errors = await validator.validate(rs);
-    if (errors && errors.length > 0) {
-      if (this.errorHandler) {
-        this.errorHandler.handleError(rs, errors, line, this.filename);
+  private async validateAndWrite(lastLine: string, total: number, v: Validator<T>, i: number): Promise<TmpResult> {
+    let success = 0;
+    for await (const line of this.read) {
+      lastLine = line;
+      total++;
+      try {
+        const rs: T = await this.transformer.transform(line);
+        const errors = await v.validate(rs);
+        if (errors && errors.length > 0) {
+          if (this.errorHandler) {
+            this.errorHandler.handleError(rs, errors, i++, this.filename);
+          }
+        } else {
+          const r = await this.writer.write(rs);
+          if (r > 0) {
+            success = success + r;
+          }
+          i++;
+        }
+      } catch (err) {
+        if (this.exceptionHandler) {
+          this.exceptionHandler.handleException(line, err, i++, this.filename);
+        }
       }
-      return 0;
-    } else {
-      const r = await this.writer.write(rs);
-      return r;
     }
+    if (this.writer.flush) {
+      try {
+        const r = await this.writer.flush();
+        if (r > 0) {
+          success = success + r;
+        }
+      } catch (err) {
+        if (this.exceptionHandler) {
+          this.exceptionHandler.handleException(lastLine, err, i, this.filename);
+        }
+      }
+    }
+    return { total, success, i };
+  }
+  private async transformAndWrite(lastLine: string, total: number, i: number): Promise<TmpResult> {
+    let success = 0;
+    for await (const line of this.read) {
+      lastLine = line;
+      i++;
+      total++;
+      try {
+        const rs: T = await this.transformer.transform(line);
+        const r = await this.writer.write(rs);
+        if (r > 0) {
+          success = success + r;
+        }
+      } catch (err) {
+        if (this.exceptionHandler) {
+          this.exceptionHandler.handleException(line, err, i, this.filename);
+        }
+      }
+    }
+    if (this.writer.flush) {
+      try {
+        const r = await this.writer.flush();
+        if (r > 0) {
+          success = success + r;
+        }
+      } catch (err) {
+        if (this.exceptionHandler) {
+          this.exceptionHandler.handleException(lastLine, err, i, this.filename);
+        }
+      }
+    }
+    return { total, success, i };
   }
 }
 export function toString(v: any): string {
@@ -339,42 +391,65 @@ export class Delimiter<T> {
   }
   transform(data: string): Promise<T> {
     const keys = Object.keys(this.attrs);
-    const rs: any = {};
+    let rs: any = {};
     const list: string[] = data.split(this.delimiter);
     const l = Math.min(list.length, keys.length);
     for (let i = 0; i < l; i++) {
       const attr = this.attrs[keys[i]];
       const v = list[i];
-      switch (attr.type) {
-        case 'number':
-        case 'integer':
-          // tslint:disable-next-line:radix
-          const parsed = parseInt(v);
-          if (!isNaN(parsed) || !Number(parsed)) {
-            rs[keys[i]] = parsed;
-          }
-          break;
-        case 'datetime':
-        case 'date':
-          const d = new Date(v);
-          if (d instanceof Date && !isNaN(d.valueOf())) {
-            rs[keys[i]] = d;
-          }
-          break;
-        case 'boolean':
-          if (v === '1' || v === 'Y' || v === 'T') {
-            rs[keys[i]] = true;
-          } else if (v.length > 0) {
-            rs[keys[i]] = false;
-          }
-          break;
-        default:
-          rs[keys[i]] = v;
-          break;
-      }
+      rs = parse(rs, v, keys[i], attr.type);
     }
     return Promise.resolve(rs);
   }
+}
+// tslint:disable-next-line:max-classes-per-file
+export class FixedLengthTransformer<T> {
+  constructor(private attrs: Attributes) {
+    this.transform = this.transform.bind(this);
+  }
+  transform(data: string): Promise<T> {
+    const keys = Object.keys(this.attrs);
+    let rs: any = {};
+    let i = 0;
+    for (const key of keys) {
+      const attr = this.attrs[key];
+      const len = attr.length ? attr.length : 10;
+      const v = data.substring(i, i + len);
+      rs = parse(rs, v.trim(), key, attr.type);
+      i = i + len;
+    }
+    return Promise.resolve(rs);
+  }
+}
+export function parse(rs: any, v: string, key: string, type?: DataType): any {
+  switch (type) {
+    case 'number':
+    case 'integer':
+      // tslint:disable-next-line:radix
+      const parsed = parseInt(v);
+      if (!isNaN(parsed) || !Number(parsed)) {
+        rs[key] = parsed;
+      }
+      break;
+    case 'datetime':
+    case 'date':
+      const d = new Date(v);
+      if (d instanceof Date && !isNaN(d.valueOf())) {
+        rs[key] = d;
+      }
+      break;
+    case 'boolean':
+      if (v === '1' || v === 'Y' || v === 'T') {
+        rs[key] = true;
+      } else if (v.length > 0) {
+        rs[key] = false;
+      }
+      break;
+    default:
+      rs[key] = v;
+      break;
+  }
+  return rs;
 }
 // tslint:disable-next-line:ban-types
 export function buildStrings(files: String[]): string[] {
