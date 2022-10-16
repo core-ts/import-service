@@ -1,6 +1,6 @@
 {
   "name": "import-service",
-  "version": "0.1.2",
+  "version": "0.1.6",
   "description": "import-service",
   "main": "./lib/index.js",
   "types": "./src/index.ts",

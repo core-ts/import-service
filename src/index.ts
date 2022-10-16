@@ -1,7 +1,12 @@
 import { once } from 'events';
+import { WriteStream } from 'fs';
 import * as fs from 'fs';
+import * as promises from 'node:fs/promises';
 import * as readline from 'readline';
 
+export interface SimpleMap {
+  [key: string]: string|number|boolean|Date;
+}
 export type DataType = 'ObjectId' | 'date' | 'datetime' | 'time'
   | 'boolean' | 'number' | 'integer' | 'string' | 'text'
   | 'object' | 'array' | 'binary'
@@ -62,6 +67,9 @@ interface TmpResult {
   success: number;
   i: number;
 }
+export interface Parser<T> {
+  parse: (data: string) => Promise<T>;
+}
 export interface Transformer<T> {
   transform: (data: string) => Promise<T>;
 }
@@ -91,9 +99,9 @@ export class Importer<T> {
     public transform: (data: string) => Promise<T>,
     public write: (obj: T) => Promise<number>,
     public flush?: () => Promise<number>,
+    public handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
     public validate?: ((obj: T) => Promise<ErrorMessage[]>),
     public handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
-    public handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
   ) {
     this.import = this.import.bind(this);
     this.transformAndWrite = this.transformAndWrite.bind(this);
@@ -229,9 +237,9 @@ export class ImportService<T> {
     public read: readline.Interface,
     public transformer: Transformer<T>,
     public writer: Writer<T>,
-    public validator?: Validator<T>,
-    public errorHandler?: ErrHandler<T>,
     public exceptionHandler?: ExHandler,
+    public validator?: Validator<T>,
+    public errorHandler?: ErrHandler<T>
   ) {
     this.import = this.import.bind(this);
     this.validateAndWrite = this.validateAndWrite.bind(this);
@@ -366,28 +374,108 @@ export function toString(v: any): string {
     return JSON.stringify(v);
   }
 }
+function clone(obj: any): any {
+  const r: any = {};
+  if (obj !== undefined) {
+    const keys = Object.keys(obj);
+    for (const key of keys) {
+      r[key] = (obj as any)[key];
+    }
+  }
+  return r;
+}
 // tslint:disable-next-line:max-classes-per-file
 export class ErrorHandler<T> {
-  constructor(private logError: (obj: string) => void) {
+  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap) {
+    this.map = mp;
+    this.filename = (filename && filename.length > 0 ? filename : 'filename');
+    this.logFileName = (filename && filename.length > 0 ? true : false);
+    this.lineNumber = (lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber');
+    this.logLineNumber = (lineNumber && lineNumber.length > 0 ? true : false);
     this.handleError = this.handleError.bind(this);
   }
-  handleError(rs: T, errors: ErrorMessage[], i?: number, filename?: string): void {
-    this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(errors)} filename: ${filename} line: ${i}`);
+  map?: SimpleMap;
+  filename: string;
+  lineNumber: string;
+  private logFileName: boolean;
+  private logLineNumber: boolean;
+  handleError(rs: T, err: ErrorMessage[], i?: number, filename?: string): void {
+    if (this.logFileName && this.logFileName) {
+      const ext = clone(this.map);
+      if (filename !== undefined) {
+        ext[this.filename] = filename;
+      }
+      if (i !== undefined) {
+        ext[this.lineNumber] = i;
+      }
+      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)}`, ext);
+    } else if (this.logFileName) {
+      const ext = clone(this.map);
+      if (filename !== undefined) {
+        ext[this.filename] = filename;
+      }
+      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)} line: ${i}`, ext);
+    } else if (this.logLineNumber) {
+      const ext = clone(this.map);
+      if (i !== undefined) {
+        ext[this.lineNumber] = i;
+      }
+      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)} filename: ${filename}`, ext);
+    } else {
+      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`);
+    }
   }
 }
 // tslint:disable-next-line:max-classes-per-file
 export class ExceptionHandler {
-  constructor(private logError: (obj: string) => void) {
+  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap) {
+    this.map = mp;
+    this.filename = (filename && filename.length > 0 ? filename : 'filename');
+    this.logFileName = (filename && filename.length > 0 ? true : false);
+    this.lineNumber = (lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber');
+    this.logLineNumber = (lineNumber && lineNumber.length > 0 ? true : false);
     this.handleException = this.handleException.bind(this);
   }
+  map?: SimpleMap;
+  filename: string;
+  lineNumber: string;
+  private logFileName: boolean;
+  private logLineNumber: boolean;
   handleException(rs: string, err: any, i?: number, filename?: string): void {
-    this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`);
+    if (this.logFileName && this.logFileName) {
+      const ext = clone(this.map);
+      if (filename !== undefined) {
+        ext[this.filename] = filename;
+      }
+      if (i !== undefined) {
+        ext[this.lineNumber] = i;
+      }
+      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)}`, ext);
+    } else if (this.logFileName) {
+      const ext = clone(this.map);
+      if (filename !== undefined) {
+        ext[this.filename] = filename;
+      }
+      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} line: ${i}`, ext);
+    } else if (this.logLineNumber) {
+      const ext = clone(this.map);
+      if (i !== undefined) {
+        ext[this.lineNumber] = i;
+      }
+      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} filename: ${filename}`, ext);
+    } else {
+      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`, this.map);
+    }
   }
 }
 // tslint:disable-next-line:max-classes-per-file
 export class Delimiter<T> {
   constructor(private delimiter: string, private attrs: Attributes) {
     this.transform = this.transform.bind(this);
+    this.parse = this.parse.bind(this);
+  }
+  parse(data: string): Promise<T> {
+    return this.transform(data);
   }
   transform(data: string): Promise<T> {
     const keys = Object.keys(this.attrs);
@@ -397,15 +485,28 @@ export class Delimiter<T> {
     for (let i = 0; i < l; i++) {
       const attr = this.attrs[keys[i]];
       const v = list[i];
-      rs = parse(rs, v, keys[i], attr.type);
+      rs = parse(rs, v, keys[i], attr);
     }
     return Promise.resolve(rs);
   }
 }
 // tslint:disable-next-line:max-classes-per-file
+export class DelimiterTransformer<T> extends Delimiter<T> {
+}
+// tslint:disable-next-line:max-classes-per-file
+export class DelimiterParser<T> extends Delimiter<T> {
+}
+// tslint:disable-next-line:max-classes-per-file
+export class CSVParser<T> extends Delimiter<T> {
+}
+// tslint:disable-next-line:max-classes-per-file
 export class FixedLengthTransformer<T> {
   constructor(private attrs: Attributes) {
     this.transform = this.transform.bind(this);
+    this.parse = this.parse.bind(this);
+  }
+  parse(data: string): Promise<T> {
+    return this.transform(data);
   }
   transform(data: string): Promise<T> {
     const keys = Object.keys(this.attrs);
@@ -415,14 +516,21 @@ export class FixedLengthTransformer<T> {
       const attr = this.attrs[key];
       const len = attr.length ? attr.length : 10;
       const v = data.substring(i, i + len);
-      rs = parse(rs, v.trim(), key, attr.type);
+      rs = parse(rs, v.trim(), key, attr);
       i = i + len;
     }
     return Promise.resolve(rs);
   }
 }
-export function parse(rs: any, v: string, key: string, type?: DataType): any {
-  switch (type) {
+// tslint:disable-next-line:max-classes-per-file
+export class FixedLengthParser<T> extends FixedLengthTransformer<T> {
+}
+export function parse(rs: any, v: string, key: string, attr: Attribute): any {
+  if (attr.default !== undefined && v.length === 0) {
+    rs[key] = attr.default;
+    return rs;
+  }
+  switch (attr.type) {
     case 'number':
     case 'integer':
       // tslint:disable-next-line:radix
@@ -506,15 +614,85 @@ export function dateToString(date: Date, separator?: string): string {
     return '' + year + month + dt;
   }
 }
+export function timeToString(date: Date, separator?: string): string {
+  let hh: number | string = date.getHours();
+  let mm: number | string = date.getMinutes();
+  let ss: number | string = date.getSeconds();
+  if (hh < 10) {
+    hh = '0' + hh.toString();
+  }
+  if (ss < 10) {
+    ss = '0' + ss.toString();
+  }
+  if (mm < 10) {
+    mm = '0' + mm;
+  }
+  if (separator !== undefined) {
+    return '' + hh + separator + mm + separator + ss;
+  } else {
+    return '' + hh + mm + ss;
+  }
+}
 export function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
 }
-export async function createReader(filename: string, options?: BufferEncoding): Promise<readline.Interface> {
-  const c = (options !== undefined ? options : 'utf-8');
+export async function createReader(filename: string, opts?: BufferEncoding): Promise<readline.Interface> {
+  const c: BufferEncoding = (opts !== undefined ? opts : 'utf-8');
   const stream = fs.createReadStream(filename, c);
   await Promise.all([once(stream, 'open')]);
   const read = readline.createInterface({ input: stream, crlfDelay: Infinity });
   return read;
+}
+export interface StreamOptions {
+  flags?: string | undefined;
+  encoding?: BufferEncoding | undefined;
+  fd?: number | promises.FileHandle | undefined;
+  mode?: number | undefined;
+  autoClose?: boolean | undefined;
+  /**
+   * @default false
+   */
+  emitClose?: boolean | undefined;
+  start?: number | undefined;
+  highWaterMark?: number | undefined;
+}
+const options: StreamOptions = { flags: 'a', encoding: 'utf-8'};
+// tslint:disable-next-line:max-classes-per-file
+export class FileWriter {
+  private writer: WriteStream;
+  suffix: string;
+  constructor(filename: string, dir: string, opts?: BufferEncoding | StreamOptions, suffix?: string) {
+    const o = (opts ? opts : options);
+    this.suffix = (suffix ? suffix : '\n');
+    this.writer = createWriteStream(dir, filename, o);
+    this.writer.cork();
+    this.write = this.write.bind(this);
+    this.flush = this.flush.bind(this);
+    this.uncork = this.uncork.bind(this);
+    this.end = this.end.bind(this);
+  }
+  write(data: string): void {
+    this.writer.write(data + this.suffix);
+  }
+  flush(): void {
+    this.writer.uncork();
+  }
+  uncork(): void {
+    this.writer.uncork();
+  }
+  end(): void {
+    this.writer.end();
+  }
+}
+export function createWriteStream(dir: string, filename: string, opts?: BufferEncoding | StreamOptions): WriteStream {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  if (dir.endsWith('/') || dir.endsWith('\\')) {
+    return fs.createWriteStream(dir + filename, opts);
+  } else {
+    return fs.createWriteStream(dir + '/' + filename, opts);
+  }
 }
