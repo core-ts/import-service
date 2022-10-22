@@ -559,6 +559,19 @@ export function parse(rs: any, v: string, key: string, attr: Attribute): any {
   }
   return rs;
 }
+export function handleNullable(obj: any, attrs: Attributes): any {
+  const keys = Object.keys(obj);
+  for (const key of keys) {
+    const v = obj[key];
+    if (v === '') {
+      const attr = attrs[key];
+      if (attr && !attr.required) {
+        obj[key] = null;
+      }
+    }
+  }
+  return obj;
+}
 // tslint:disable-next-line:ban-types
 export function buildStrings(files: String[]): string[] {
   const res: string[] = [];
@@ -660,7 +673,7 @@ export interface StreamOptions {
 }
 const options: StreamOptions = { flags: 'a', encoding: 'utf-8'};
 // tslint:disable-next-line:max-classes-per-file
-export class FileWriter {
+export class LogWriter {
   private writer: WriteStream;
   suffix: string;
   constructor(filename: string, dir: string, opts?: BufferEncoding | StreamOptions, suffix?: string) {
