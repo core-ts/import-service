@@ -4,6 +4,24 @@ import * as fs from 'fs';
 import * as promises from 'node:fs/promises';
 import * as readline from 'readline';
 
+// tslint:disable-next-line:class-name
+export class resources {
+  static regex = /[^\d](\d{14})\.csv$/g;
+}
+export function getDate(fileName: string): Date | undefined {
+  const nm = resources.regex.exec(fileName);
+  if (!nm || nm.length < 2) {
+    return undefined;
+  }
+  const v = nm[1];
+  const ft = `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}T${v.slice(8, 10)}:${v.slice(10, 12)}:${v.slice(12, 14)}`;
+  const d = new Date(ft);
+  const num = d.getTime();
+  if (!num || isNaN(num)) {
+    return undefined;
+  }
+  return d;
+}
 export interface SimpleMap {
   [key: string]: string|number|boolean|Date;
 }
@@ -47,6 +65,7 @@ export interface Attribute {
   typeof?: Attributes;
   true?: string | number;
   false?: string | number;
+  getString?: (v: any) => string;
 }
 export interface Attributes {
   [key: string]: Attribute;
@@ -91,6 +110,7 @@ export interface ImportManager {
   read: readline.Interface;
   import(): Promise<Result>;
 }
+// tslint:disable-next-line:max-classes-per-file
 export class Importer<T> {
   constructor(
     public skip: number,
@@ -400,7 +420,7 @@ export class ErrorHandler<T> {
   private logFileName: boolean;
   private logLineNumber: boolean;
   handleError(rs: T, err: ErrorMessage[], i?: number, filename?: string): void {
-    if (this.logFileName && this.logFileName) {
+    if (this.logFileName && this.logLineNumber) {
       const ext = clone(this.map);
       if (filename !== undefined) {
         ext[this.filename] = filename;
@@ -442,7 +462,7 @@ export class ExceptionHandler {
   private logFileName: boolean;
   private logLineNumber: boolean;
   handleException(rs: string, err: any, i?: number, filename?: string): void {
-    if (this.logFileName && this.logFileName) {
+    if (this.logFileName && this.logLineNumber) {
       const ext = clone(this.map);
       if (filename !== undefined) {
         ext[this.filename] = filename;
