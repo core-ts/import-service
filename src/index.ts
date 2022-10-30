@@ -9,7 +9,8 @@ export class resources {
   static regex = /[^\d](\d{14})\.csv$/g;
 }
 export function getDate(fileName: string): Date | undefined {
-  const nm = resources.regex.exec(fileName);
+  const r = new RegExp(resources.regex);
+  const nm = r.exec(fileName);
   if (!nm || nm.length < 2) {
     return undefined;
   }
@@ -671,6 +672,11 @@ export function addDays(date: Date, days: number): Date {
   result.setDate(result.getDate() + days);
   return result;
 }
+export function mkdirSync(dir: string): void {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
+  }
+}
 export async function createReader(filename: string, opts?: BufferEncoding): Promise<readline.Interface> {
   const c: BufferEncoding = (opts !== undefined ? opts : 'utf-8');
   const stream = fs.createReadStream(filename, c);
@@ -727,5 +733,30 @@ export function createWriteStream(dir: string, filename: string, opts?: BufferEn
     return fs.createWriteStream(dir + filename, opts);
   } else {
     return fs.createWriteStream(dir + '/' + filename, opts);
+  }
+}
+export function parseNum(s?: string): number | undefined {
+  if (!s || s.length === 0) {
+    return undefined;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? undefined : n;
+}
+export function parseNumber(s: string|undefined, d: number): number {
+  if (!s || s.length === 0) {
+    return d;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? d : n;
+}
+export function parseDate(s: string|undefined, undefinedIfInvalid?: boolean): Date|undefined {
+  if (!s || s.length === 0) {
+    return undefined;
+  }
+  const d = new Date(s);
+  if (d instanceof Date && !isNaN(d.valueOf())) {
+    return d;
+  } else {
+    return undefinedIfInvalid ? undefined : d;
   }
 }
