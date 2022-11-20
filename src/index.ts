@@ -632,7 +632,7 @@ export function getPrefix(s: string, date: Date, offset?: number, separator?: st
   }
 }
 export function dateToString(date: Date, separator?: string): string {
-  const year = date.getFullYear();
+  const year = date.getFullYear().toString();
   let month: number | string = date.getMonth() + 1;
   let dt: number | string = date.getDate();
 
@@ -643,9 +643,9 @@ export function dateToString(date: Date, separator?: string): string {
     month = '0' + month;
   }
   if (separator !== undefined) {
-    return '' + year + separator + month + separator + dt;
+    return year + separator + month + separator + dt;
   } else {
-    return '' + year + month + dt;
+    return year + month + dt;
   }
 }
 export function timeToString(date: Date, separator?: string): string {
@@ -662,9 +662,9 @@ export function timeToString(date: Date, separator?: string): string {
     mm = '0' + mm;
   }
   if (separator !== undefined) {
-    return '' + hh + separator + mm + separator + ss;
+    return hh.toString() + separator + mm + separator + ss;
   } else {
-    return '' + hh + mm + ss;
+    return hh.toString() + mm + ss;
   }
 }
 export function toISOString(d: Date): string {
@@ -681,17 +681,17 @@ export function getTimezone(d: Date): string {
   } else {
     return t < 9
       ? '+0' + Math.abs(t) + ':00'
-      : '' + Math.abs(t) + ':' + getMinutes(p);
+      : Math.abs(t).toString() + ':' + getMinutes(p);
   }
 }
 export function getMinutes(p: number): string {
   const x = Math.abs(p);
-  return x >= 10 ? '' + x : '0' + x;
+  return x >= 10 ? x.toString() : '0' + x;
 }
 export function getMilliseconds(d: Date): string {
   const m = d.getMilliseconds();
   if (m >= 100) {
-    return '' + m;
+    return m.toString();
   } else if (m >= 10) {
     return '0' + m;
   } else {
