@@ -24,7 +24,7 @@ export function getDate(fileName: string): Date | undefined {
   return d;
 }
 export interface SimpleMap {
-  [key: string]: string|number|boolean|Date;
+  [key: string]: string | number | boolean | Date;
 }
 export type DataType = 'ObjectId' | 'date' | 'datetime' | 'time'
   | 'boolean' | 'number' | 'integer' | 'string' | 'text'
@@ -667,10 +667,64 @@ export function timeToString(date: Date, separator?: string): string {
     return '' + hh + mm + ss;
   }
 }
+export function toISOString(d: Date): string {
+  const s = `${dateToString(d, '-')}T${timeToString(d, ':')}.${getMilliseconds(d)}${getTimezone(d)}`;
+  return s;
+}
+export function getTimezone(d: Date): string {
+  const t = d.getTimezoneOffset() / 60;
+  const p = d.getTimezoneOffset() % 60;
+  if (t > 0) {
+    return t > -10
+      ? '-0' + Math.abs(t) + ':00'
+      : '-' + Math.abs(t) + ':' + getMinutes(p);
+  } else {
+    return t < 9
+      ? '+0' + Math.abs(t) + ':00'
+      : '' + Math.abs(t) + ':' + getMinutes(p);
+  }
+}
+export function getMinutes(p: number): string {
+  const x = Math.abs(p);
+  return x >= 10 ? '' + x : '0' + x;
+}
+export function getMilliseconds(d: Date): string {
+  const m = d.getMilliseconds();
+  if (m >= 100) {
+    return '' + m;
+  } else if (m >= 10) {
+    return '0' + m;
+  } else {
+    return '00' + m;
+  }
+}
 export function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+export function getFields(attrs: Attributes, t: string): string[] {
+  const fis: string[] = [];
+  const keys = Object.keys(attrs);
+  for (const key of keys) {
+    const attr = attrs[key];
+    if (attr.type === t) {
+      fis.push(key);
+    }
+  }
+  return fis;
+}
+export function reformatDates(obj: any, ignores: string[]): any {
+  const keys = Object.keys(obj);
+  for (const key of keys) {
+    const v = obj[key];
+    if (v instanceof Date) {
+      if (!ignores.includes(key)) {
+        obj[key] = toISOString(v);
+      }
+    }
+  }
+  return obj;
 }
 export function mkdirSync(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -697,7 +751,7 @@ export interface StreamOptions {
   start?: number | undefined;
   highWaterMark?: number | undefined;
 }
-const options: StreamOptions = { flags: 'a', encoding: 'utf-8'};
+const options: StreamOptions = { flags: 'a', encoding: 'utf-8' };
 // tslint:disable-next-line:max-classes-per-file
 export class LogWriter {
   private writer: WriteStream;
@@ -742,14 +796,14 @@ export function parseNum(s?: string): number | undefined {
   const n = parseFloat(s);
   return isNaN(n) ? undefined : n;
 }
-export function parseNumber(s: string|undefined, d: number): number {
+export function parseNumber(s: string | undefined, d: number): number {
   if (!s || s.length === 0) {
     return d;
   }
   const n = parseFloat(s);
   return isNaN(n) ? d : n;
 }
-export function parseDate(s: string|undefined, undefinedIfInvalid?: boolean): Date|undefined {
+export function parseDate(s: string | undefined, undefinedIfInvalid?: boolean): Date | undefined {
   if (!s || s.length === 0) {
     return undefined;
   }
