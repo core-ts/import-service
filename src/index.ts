@@ -407,14 +407,16 @@ function clone(obj: any): any {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class ErrorHandler<T> {
-  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap) {
+  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap, prefix?: string) {
     this.map = mp;
+    this.prefix = (prefix && prefix.length > 0 ? prefix : 'Message is invalid: ');
     this.filename = (filename && filename.length > 0 ? filename : 'filename');
     this.logFileName = (filename && filename.length > 0 ? true : false);
     this.lineNumber = (lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber');
     this.logLineNumber = (lineNumber && lineNumber.length > 0 ? true : false);
     this.handleError = this.handleError.bind(this);
   }
+  prefix: string;
   map?: SimpleMap;
   filename: string;
   lineNumber: string;
@@ -429,34 +431,36 @@ export class ErrorHandler<T> {
       if (i !== undefined) {
         ext[this.lineNumber] = i;
       }
-      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)}`, ext);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)}`, ext);
     } else if (this.logFileName) {
       const ext = clone(this.map);
       if (filename !== undefined) {
         ext[this.filename] = filename;
       }
-      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)} line: ${i}`, ext);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)} line: ${i}`, ext);
     } else if (this.logLineNumber) {
       const ext = clone(this.map);
       if (i !== undefined) {
         ext[this.lineNumber] = i;
       }
-      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)} filename: ${filename}`, ext);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)} filename: ${filename}`, ext);
     } else {
-      this.logError(`Message is invalid: ${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`);
     }
   }
 }
 // tslint:disable-next-line:max-classes-per-file
 export class ExceptionHandler {
-  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap) {
+  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap, prefix?: string) {
     this.map = mp;
+    this.prefix = (prefix && prefix.length > 0 ? prefix : 'Error to write: ');
     this.filename = (filename && filename.length > 0 ? filename : 'filename');
     this.logFileName = (filename && filename.length > 0 ? true : false);
     this.lineNumber = (lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber');
     this.logLineNumber = (lineNumber && lineNumber.length > 0 ? true : false);
     this.handleException = this.handleException.bind(this);
   }
+  prefix: string;
   map?: SimpleMap;
   filename: string;
   lineNumber: string;
@@ -471,21 +475,21 @@ export class ExceptionHandler {
       if (i !== undefined) {
         ext[this.lineNumber] = i;
       }
-      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)}`, ext);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)}`, ext);
     } else if (this.logFileName) {
       const ext = clone(this.map);
       if (filename !== undefined) {
         ext[this.filename] = filename;
       }
-      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} line: ${i}`, ext);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)} line: ${i}`, ext);
     } else if (this.logLineNumber) {
       const ext = clone(this.map);
       if (i !== undefined) {
         ext[this.lineNumber] = i;
       }
-      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} filename: ${filename}`, ext);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)} filename: ${filename}`, ext);
     } else {
-      this.logError(`Error to write: ${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`, this.map);
+      this.logError(`${this.prefix}${toString(rs)} . Error: ${toString(err)} filename: ${filename} line: ${i}`, this.map);
     }
   }
 }
