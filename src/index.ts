@@ -718,13 +718,14 @@ export function getFields(attrs: Attributes, t: string): string[] {
   }
   return fis;
 }
-export function reformatDates(obj: any, ignores: string[]): any {
+export function reformatDates(obj: any, ignores: string[], dToString?: (d: Date) => string): any {
+  const toS = dToString ? dToString : toISOString;
   const keys = Object.keys(obj);
   for (const key of keys) {
     const v = obj[key];
     if (v instanceof Date) {
       if (!ignores.includes(key)) {
-        obj[key] = toISOString(v);
+        obj[key] = toS(v);
       }
     }
   }
