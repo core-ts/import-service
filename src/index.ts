@@ -1,6 +1,6 @@
 import { once } from 'events';
-import { WriteStream } from 'fs';
 import * as fs from 'fs';
+import { WriteStream } from 'fs';
 import * as promises from 'node:fs/promises';
 import * as readline from 'readline';
 
@@ -26,47 +26,27 @@ export function getDate(fileName: string): Date | undefined {
 export interface SimpleMap {
   [key: string]: string | number | boolean | Date;
 }
-export type DataType = 'ObjectId' | 'date' | 'datetime' | 'time'
-  | 'boolean' | 'number' | 'integer' | 'string' | 'text'
-  | 'object' | 'array' | 'binary'
-  | 'primitives' | 'booleans' | 'numbers' | 'integers' | 'strings' | 'dates' | 'datetimes' | 'times';
+export type DataType = 'ObjectId' | 'date' | 'datetime' | 'time' | 'boolean' | 'number' | 'integer' | 'string' | 'text' | 'object' | 'array' | 'binary' | 'primitives' | 'booleans' | 'numbers' | 'integers' | 'strings' | 'dates' | 'datetimes' | 'times';
 export type FormatType = 'currency' | 'percentage' | 'email' | 'url' | 'phone' | 'fax' | 'ipv4' | 'ipv6';
-export type MatchType = 'equal' | 'prefix' | 'contain' | 'max' | 'min'; // contain: default for string, min: default for Date, number
+export type Operator = '=' | 'like' | '!=' | '<>' | '>' | '>=' | '<' | '<=';
 
-export interface Attribute {
+export interface Model {
   name?: string;
-  field?: string;
-  column?: string;
+  attributes: Attributes;
+  source?: string;
+  table?: string;
+  collection?: string;
+  // for mongo lowcode
+  sort?: string;
+  geo?: string;
+  latitude?: string;
+  longitude?: string;
+}
+export interface Attribute {
   type?: DataType;
-  format?: FormatType;
   required?: boolean;
-  match?: MatchType;
   default?: string | number | Date | boolean;
-  key?: boolean;
-  unique?: boolean;
-  enum?: string[] | number[];
-  q?: boolean;
-  noinsert?: boolean;
-  noupdate?: boolean;
-  nopatch?: boolean;
-  version?: boolean;
   length?: number;
-  min?: number;
-  max?: number;
-  gt?: number;
-  lt?: number;
-  precision?: number;
-  scale?: number;
-  exp?: RegExp | string;
-  code?: string;
-  noformat?: boolean;
-  ignored?: boolean;
-  jsonField?: string;
-  link?: string;
-  typeof?: Attributes;
-  true?: string | number;
-  false?: string | number;
-  getString?: (v: any) => string;
 }
 export interface Attributes {
   [key: string]: Attribute;
@@ -121,7 +101,7 @@ export class Importer<T> {
     public write: (obj: T) => Promise<number>,
     public flush?: () => Promise<number>,
     public handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
-    public validate?: ((obj: T) => Promise<ErrorMessage[]>),
+    public validate?: (obj: T) => Promise<ErrorMessage[]>,
     public handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
   ) {
     this.import = this.import.bind(this);
@@ -178,7 +158,7 @@ export class Importer<T> {
       return { total, success };
     }
   }
-  private async validateAndWrite(lastLine: string, total: number, validate: ((obj: T) => Promise<ErrorMessage[]>), i: number): Promise<TmpResult> {
+  private async validateAndWrite(lastLine: string, total: number, validate: (obj: T) => Promise<ErrorMessage[]>, i: number): Promise<TmpResult> {
     let success = 0;
     for await (const line of this.read) {
       lastLine = line;
@@ -260,7 +240,7 @@ export class ImportService<T> {
     public writer: Writer<T>,
     public exceptionHandler?: ExHandler,
     public validator?: Validator<T>,
-    public errorHandler?: ErrHandler<T>
+    public errorHandler?: ErrHandler<T>,
   ) {
     this.import = this.import.bind(this);
     this.validateAndWrite = this.validateAndWrite.bind(this);
@@ -407,13 +387,19 @@ function clone(obj: any): any {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class ErrorHandler<T> {
-  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap, prefix?: string) {
+  constructor(
+    public logError: (obj: string, m?: SimpleMap) => void,
+    filename?: string,
+    lineNumber?: string,
+    mp?: SimpleMap,
+    prefix?: string,
+  ) {
     this.map = mp;
-    this.prefix = (prefix && prefix.length > 0 ? prefix : 'Message is invalid: ');
-    this.filename = (filename && filename.length > 0 ? filename : 'filename');
-    this.logFileName = (filename && filename.length > 0 ? true : false);
-    this.lineNumber = (lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber');
-    this.logLineNumber = (lineNumber && lineNumber.length > 0 ? true : false);
+    this.prefix = prefix && prefix.length > 0 ? prefix : 'Message is invalid: ';
+    this.filename = filename && filename.length > 0 ? filename : 'filename';
+    this.logFileName = filename && filename.length > 0 ? true : false;
+    this.lineNumber = lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber';
+    this.logLineNumber = lineNumber && lineNumber.length > 0 ? true : false;
     this.handleError = this.handleError.bind(this);
   }
   prefix: string;
@@ -451,13 +437,19 @@ export class ErrorHandler<T> {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class ExceptionHandler {
-  constructor(public logError: (obj: string, m?: SimpleMap) => void, filename?: string, lineNumber?: string, mp?: SimpleMap, prefix?: string) {
+  constructor(
+    public logError: (obj: string, m?: SimpleMap) => void,
+    filename?: string,
+    lineNumber?: string,
+    mp?: SimpleMap,
+    prefix?: string,
+  ) {
     this.map = mp;
-    this.prefix = (prefix && prefix.length > 0 ? prefix : 'Error to write: ');
-    this.filename = (filename && filename.length > 0 ? filename : 'filename');
-    this.logFileName = (filename && filename.length > 0 ? true : false);
-    this.lineNumber = (lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber');
-    this.logLineNumber = (lineNumber && lineNumber.length > 0 ? true : false);
+    this.prefix = prefix && prefix.length > 0 ? prefix : 'Error to write: ';
+    this.filename = filename && filename.length > 0 ? filename : 'filename';
+    this.logFileName = filename && filename.length > 0 ? true : false;
+    this.lineNumber = lineNumber && lineNumber.length > 0 ? lineNumber : 'lineNumber';
+    this.logLineNumber = lineNumber && lineNumber.length > 0 ? true : false;
     this.handleException = this.handleException.bind(this);
   }
   prefix: string;
@@ -495,7 +487,10 @@ export class ExceptionHandler {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class Delimiter<T> {
-  constructor(private delimiter: string, private attrs: Attributes) {
+  constructor(
+    private delimiter: string,
+    private attrs: Attributes,
+  ) {
     this.transform = this.transform.bind(this);
     this.parse = this.parse.bind(this);
   }
@@ -516,14 +511,11 @@ export class Delimiter<T> {
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class DelimiterTransformer<T> extends Delimiter<T> {
-}
+export class DelimiterTransformer<T> extends Delimiter<T> {}
 // tslint:disable-next-line:max-classes-per-file
-export class DelimiterParser<T> extends Delimiter<T> {
-}
+export class DelimiterParser<T> extends Delimiter<T> {}
 // tslint:disable-next-line:max-classes-per-file
-export class CSVParser<T> extends Delimiter<T> {
-}
+export class CSVParser<T> extends Delimiter<T> {}
 // tslint:disable-next-line:max-classes-per-file
 export class FixedLengthTransformer<T> {
   constructor(private attrs: Attributes) {
@@ -548,8 +540,7 @@ export class FixedLengthTransformer<T> {
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class FixedLengthParser<T> extends FixedLengthTransformer<T> {
-}
+export class FixedLengthParser<T> extends FixedLengthTransformer<T> {}
 export function parse(rs: any, v: string, key: string, attr: Attribute): any {
   if (attr.default !== undefined && v.length === 0) {
     rs[key] = attr.default;
@@ -617,7 +608,10 @@ export function getFiles(files: string[], check: (s: string) => boolean): string
 }
 // tslint:disable-next-line:max-classes-per-file
 export class NameChecker {
-  constructor(private prefix: string, private suffix: string) {
+  constructor(
+    private prefix: string,
+    private suffix: string,
+  ) {
     this.check = this.check.bind(this);
   }
   check(name: string): boolean {
@@ -679,13 +673,9 @@ export function getTimezone(d: Date): string {
   const t = d.getTimezoneOffset() / 60;
   const p = d.getTimezoneOffset() % 60;
   if (t > 0) {
-    return t > -10
-      ? '-0' + Math.abs(t) + ':00'
-      : '-' + Math.abs(t) + ':' + getMinutes(p);
+    return t > -10 ? '-0' + Math.abs(t) + ':00' : '-' + Math.abs(t) + ':' + getMinutes(p);
   } else {
-    return t < 9
-      ? '+0' + Math.abs(t) + ':00'
-      : Math.abs(t).toString() + ':' + getMinutes(p);
+    return t < 9 ? '+0' + Math.abs(t) + ':00' : Math.abs(t).toString() + ':' + getMinutes(p);
   }
 }
 export function getMinutes(p: number): string {
@@ -718,14 +708,13 @@ export function getFields(attrs: Attributes, t: string): string[] {
   }
   return fis;
 }
-export function reformatDates(obj: any, ignores: string[], dToString?: (d: Date) => string): any {
-  const toS = dToString ? dToString : toISOString;
+export function reformatDates(obj: any, ignores: string[]): any {
   const keys = Object.keys(obj);
   for (const key of keys) {
     const v = obj[key];
     if (v instanceof Date) {
       if (!ignores.includes(key)) {
-        obj[key] = toS(v);
+        obj[key] = toISOString(v);
       }
     }
   }
@@ -737,7 +726,7 @@ export function mkdirSync(dir: string): void {
   }
 }
 export async function createReader(filename: string, opts?: BufferEncoding): Promise<readline.Interface> {
-  const c: BufferEncoding = (opts !== undefined ? opts : 'utf-8');
+  const c: BufferEncoding = opts !== undefined ? opts : 'utf-8';
   const stream = fs.createReadStream(filename, c);
   await Promise.all([once(stream, 'open')]);
   const read = readline.createInterface({ input: stream, crlfDelay: Infinity });
@@ -762,8 +751,8 @@ export class LogWriter {
   private writer: WriteStream;
   suffix: string;
   constructor(filename: string, dir: string, opts?: BufferEncoding | StreamOptions, suffix?: string) {
-    const o = (opts ? opts : options);
-    this.suffix = (suffix ? suffix : '\n');
+    const o = opts ? opts : options;
+    this.suffix = suffix ? suffix : '\n';
     this.writer = createWriteStream(dir, filename, o);
     this.writer.cork();
     this.write = this.write.bind(this);
