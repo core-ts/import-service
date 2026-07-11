@@ -15,17 +15,13 @@ export class resources {
   }
   static parseDate<T>(res: T, key: string, v: string): void {
     const d = new Date(v)
-    if (d instanceof Date && !isNaN(d.valueOf())) {
+    if (d instanceof Date && !isNaN(d.getTime())) {
       ;(res as any)[key] = d
     }
   }
   static parseBool<T>(res: T, key: string, v: string): void {
     if (v.length > 0) {
-      if (v === "1" || v === "Y" || v === "T") {
-        ;(res as any)[key] = true
-      } else {
-        ;(res as any)[key] = false
-      }
+      ;(res as any)[key] = v === "1" || v === "Y" || v === "T"
     }
   }
 }
@@ -113,13 +109,7 @@ export interface ErrHandler<T> {
 export interface ExHandler<S> {
   handleException(res: S, err: any, i?: number, filename?: string): void
 }
-/*
-export interface ImportManager {
-  filename: string
-  read: AsyncIterable<string>
-  import(): Promise<Result>
-}
-  */
+
 // tslint:disable-next-line:max-classes-per-file
 export class Importer<T, S> {
   constructor(
@@ -153,7 +143,7 @@ export class Importer<T, S> {
           i++
         }
         if (this.flush) {
-          this.flush()
+          await this.flush()
         }
       }
       return { total, success }
@@ -168,7 +158,7 @@ export class Importer<T, S> {
         i++
       }
       if (this.flush) {
-        this.flush()
+        await this.flush()
       }
       return { total, success }
     }
@@ -238,7 +228,7 @@ export class ImportService<T, S> {
           i++
         }
         if (this.writer.flush) {
-          this.writer.flush()
+          await this.writer.flush()
         }
       }
       return { total, success }
@@ -253,7 +243,7 @@ export class ImportService<T, S> {
         i++
       }
       if (this.writer.flush) {
-        this.writer.flush()
+        await this.writer.flush()
       }
       return { total, success }
     }
@@ -410,55 +400,77 @@ export class ExceptionHandler<S> {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class CSVTransformer<T> {
-  constructor(private attrs: Attributes) {
+  constructor(attrs: Attributes) {
     this.transform = this.transform.bind(this)
-    this.parse = this.parse.bind(this)
-    this.fieldParser = createFieldParsers(attrs)
+    this.fieldParsers = createFieldParsers(attrs)
   }
-  protected fieldParser: IFieldParser<T>[]
-  parse(data: string[]): Promise<T> {
-    return this.transform(data)
-  }
+  protected fieldParsers: IFieldParser<T>[]
   transform(data: string[]): Promise<T> {
     let res: any = {}
-    const l = Math.min(data.length, this.fieldParser.length)
+    const l = Math.min(data.length, this.fieldParsers.length)
     for (let i = 0; i < l; i++) {
-      this.fieldParser[i].parse(res, this.fieldParser[i].name, data[i])
+      const parser = this.fieldParsers[i]
+      parser.parse(res, parser.name, data[i])
     }
     return Promise.resolve(res)
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class DelimiterTransformer<T> extends CSVTransformer<T> {}
-// tslint:disable-next-line:max-classes-per-file
-export class DelimiterParser<T> extends CSVTransformer<T> {}
+export class CSVParser<T> {
+  constructor(attrs: Attributes) {
+    this.parse = this.parse.bind(this)
+    this.fieldParsers = createFieldParsers(attrs)
+  }
+  protected fieldParsers: IFieldParser<T>[]
+  parse(data: string[]): Promise<T> {
+    let res: any = {}
+    const l = Math.min(data.length, this.fieldParsers.length)
+    for (let i = 0; i < l; i++) {
+      const parser = this.fieldParsers[i]
+      parser.parse(res, parser.name, data[i])
+    }
+    return Promise.resolve(res)
+  }
+}
 
 // tslint:disable-next-line:max-classes-per-file
 export class FixedLengthTransformer<T> {
-  constructor(private attrs: Attributes) {
+  constructor(attributes: Attributes) {
     this.transform = this.transform.bind(this)
-    this.parse = this.parse.bind(this)
-    this.fieldParser = createFieldParsers(attrs)
+    this.fieldParsers = createFieldParsers(attributes)
   }
-  protected fieldParser: IFieldParser<T>[]
-  parse(data: string): Promise<T> {
-    return this.transform(data)
-  }
+  protected fieldParsers: IFieldParser<T>[]
   transform(data: string): Promise<T> {
-    const keys = Object.keys(this.attrs)
     let res: any = {}
-    let i = 0
-    const l = this.fieldParser.length
+    const l = this.fieldParsers.length
     for (let i = 0; i < l; i++) {
-      const len = this.fieldParser[i].length ? this.fieldParser[i].length : 10
+      const parser = this.fieldParsers[i]
+      const len = parser.length ? parser.length : 10
       const v = data.substring(i, i + len)
-      this.fieldParser[i].parse(res, this.fieldParser[i].name, v.trim())
+      parser.parse(res, parser.name, v.trim())
     }
     return Promise.resolve(res)
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class FixedLengthParser<T> extends FixedLengthTransformer<T> {}
+export class FixedLengthParser<T> {
+  constructor(attributes: Attributes) {
+    this.parse = this.parse.bind(this)
+    this.fieldParsers = createFieldParsers(attributes)
+  }
+  protected fieldParsers: IFieldParser<T>[]
+  parse(data: string): Promise<T> {
+    let res: any = {}
+    const l = this.fieldParsers.length
+    for (let i = 0; i < l; i++) {
+      const parser = this.fieldParsers[i]
+      const len = parser.length ? parser.length : 10
+      const v = data.substring(i, i + len)
+      parser.parse(res, parser.name, v.trim())
+    }
+    return Promise.resolve(res)
+  }
+}
 export interface IFieldParser<T> {
   name: string
   length: number
@@ -495,66 +507,6 @@ export class FieldParser<T> implements IFieldParser<T> {
     ;(res as any)[key] = v
   }
 }
-/*
-export function parseNo<T>(res: T, key: string, v: string): void {
-  if (v && !isNaN(v as any)) {
-    const n = parseFloat(v)
-    ;(res as any)[key] = n
-  }
-}
-
-export function parseDatetime<T>(res: T, key: string, v: string): void {
-  const d = new Date(v)
-
-  if (d instanceof Date && !isNaN(d.valueOf())) {
-    ;(res as any)[key] = d
-  }
-}
-
-export function parseBool<T>(res: T, key: string, v: string): void {
-  if (v.length > 0) {
-    if (v === "1" || v === "Y" || v === "T") {
-      ;(res as any)[key] = true
-    } else {
-      ;(res as any)[key] = false
-    }
-  }
-}
-export function parse(rs: any, v: string, key: string, attr: Attribute): any {
-  if (attr.default !== undefined && v.length === 0) {
-    rs[key] = attr.default
-    return rs
-  }
-  switch (attr.type) {
-    case "number":
-    case "integer":
-      // tslint:disable-next-line:radix
-      const parsed = parseInt(v)
-      if (!isNaN(parsed) || !Number(parsed)) {
-        rs[key] = parsed
-      }
-      break
-    case "datetime":
-    case "date":
-      const d = new Date(v)
-      if (d instanceof Date && !isNaN(d.valueOf())) {
-        rs[key] = d
-      }
-      break
-    case "boolean":
-      if (v === "1" || v === "Y" || v === "T") {
-        rs[key] = true
-      } else if (v.length > 0) {
-        rs[key] = false
-      }
-      break
-    default:
-      rs[key] = v
-      break
-  }
-  return rs
-}
-*/
 export function handleNullable(obj: any, attrs: Attributes): any {
   const keys = Object.keys(obj)
   for (const key of keys) {
@@ -692,7 +644,7 @@ export function reformatDates(obj: any, ignores: string[]): any {
   const keys = Object.keys(obj)
   for (const key of keys) {
     const v = obj[key]
-    if (v instanceof Date) {
+    if (v instanceof Date && !isNaN(v.getTime())) {
       if (!ignores.includes(key)) {
         obj[key] = toISOString(v)
       }
@@ -782,7 +734,7 @@ export function parseDate(s: string | undefined, undefinedIfInvalid?: boolean): 
     return undefined
   }
   const d = new Date(s)
-  if (d instanceof Date && !isNaN(d.valueOf())) {
+  if (d instanceof Date && !isNaN(d.getTime())) {
     return d
   } else {
     return undefinedIfInvalid ? undefined : d
