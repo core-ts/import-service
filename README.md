@@ -1,6 +1,6 @@
 # import-service
 
-A lightweight, streaming, extensible **TypeScript import framework** for building data import pipelines.
+A lightweight, streaming, extensible **TypeScript data-import-library** for building data import pipelines.
 
 Unlike traditional CSV libraries that only parse files, **Import Service** provides a complete import pipeline:
 
