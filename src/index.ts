@@ -423,7 +423,9 @@ export class FixedLengthTransformer<T> {
   constructor(private attrs: Attributes) {
     this.transform = this.transform.bind(this)
     this.parse = this.parse.bind(this)
+    this.fieldParser = createFieldParsers(attrs)
   }
+  protected fieldParser: IFieldParser<T>[]
   parse(data: string): Promise<T> {
     return this.transform(data)
   }
@@ -443,6 +445,67 @@ export class FixedLengthTransformer<T> {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class FixedLengthParser<T> extends FixedLengthTransformer<T> {}
+export interface IFieldParser<T> {
+  name: string
+  length: number
+  parse(data: T, key: string, v: string): void
+}
+
+export function createFieldParsers<T>(attrs: Attributes): IFieldParser<T>[] {
+  const parsers: IFieldParser<T>[] = []
+  for (const key in attrs) {
+    const attr = attrs[key]
+    const parser = new FieldParser<T>(key, attr.length ? attr.length : 10)
+
+    if (attr.type === "number" || attr.type === "integer") {
+      parser.parse = parseNo
+    } else if (attr.type === "datetime" || attr.type === "date") {
+      parser.parse = parseDatetime
+    } else if (attr.type === "boolean") {
+      parser.parse = parseBool
+    }
+
+    parsers.push(parser)
+  }
+
+  return parsers
+}
+
+export class FieldParser<T> implements IFieldParser<T> {
+  constructor(
+    public name: string,
+    public length: number,
+  ) {}
+
+  parse(res: T, key: string, v: string): void {
+    ;(res as any)[key] = v
+  }
+}
+
+export function parseNo<T>(res: T, key: string, v: string): void {
+  if (v && !isNaN(v as any)) {
+    const n = parseFloat(v)
+    ;(res as any)[key] = n
+  }
+}
+
+export function parseDatetime<T>(res: T, key: string, v: string): void {
+  const d = new Date(v)
+
+  if (d instanceof Date && !isNaN(d.valueOf())) {
+    ;(res as any)[key] = d
+  }
+}
+
+export function parseBool<T>(res: T, key: string, v: string): void {
+  if (v.length > 0) {
+    if (v === "1" || v === "Y" || v === "T") {
+      ;(res as any)[key] = true
+    } else {
+      ;(res as any)[key] = false
+    }
+  }
+}
 export function parse(rs: any, v: string, key: string, attr: Attribute): any {
   if (attr.default !== undefined && v.length === 0) {
     rs[key] = attr.default
