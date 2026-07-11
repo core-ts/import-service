@@ -7,6 +7,27 @@ import * as readline from "readline"
 // tslint:disable-next-line:class-name
 export class resources {
   static regex = /[^\d](\d{14})\.csv$/g
+  static parseNumber<T>(res: T, key: string, v: string): void {
+    if (v && !isNaN(v as any)) {
+      const n = parseFloat(v)
+      ;(res as any)[key] = n
+    }
+  }
+  static parseDate<T>(res: T, key: string, v: string): void {
+    const d = new Date(v)
+    if (d instanceof Date && !isNaN(d.valueOf())) {
+      ;(res as any)[key] = d
+    }
+  }
+  static parseBool<T>(res: T, key: string, v: string): void {
+    if (v.length > 0) {
+      if (v === "1" || v === "Y" || v === "T") {
+        ;(res as any)[key] = true
+      } else {
+        ;(res as any)[key] = false
+      }
+    }
+  }
 }
 export function getDate(fileName: string): Date | undefined {
   const r = new RegExp(resources.regex)
@@ -451,11 +472,11 @@ export function createFieldParsers<T>(attrs: Attributes): IFieldParser<T>[] {
     const parser = new FieldParser<T>(key, attr.length ? attr.length : 10)
 
     if (attr.type === "number" || attr.type === "integer") {
-      parser.parse = parseNo
+      parser.parse = resources.parseNumber
     } else if (attr.type === "datetime" || attr.type === "date") {
-      parser.parse = parseDatetime
+      parser.parse = resources.parseDate
     } else if (attr.type === "boolean") {
-      parser.parse = parseBool
+      parser.parse = resources.parseBool
     }
 
     parsers.push(parser)
@@ -474,7 +495,7 @@ export class FieldParser<T> implements IFieldParser<T> {
     ;(res as any)[key] = v
   }
 }
-
+/*
 export function parseNo<T>(res: T, key: string, v: string): void {
   if (v && !isNaN(v as any)) {
     const n = parseFloat(v)
@@ -533,6 +554,7 @@ export function parse(rs: any, v: string, key: string, attr: Attribute): any {
   }
   return rs
 }
+*/
 export function handleNullable(obj: any, attrs: Attributes): any {
   const keys = Object.keys(obj)
   for (const key of keys) {
