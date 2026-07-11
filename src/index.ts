@@ -388,36 +388,30 @@ export class ExceptionHandler<S> {
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class Delimiter<T> {
-  constructor(
-    private delimiter: string,
-    private attrs: Attributes,
-  ) {
+export class CSVTransformer<T> {
+  constructor(private attrs: Attributes) {
     this.transform = this.transform.bind(this)
     this.parse = this.parse.bind(this)
+    this.fieldParser = createFieldParsers(attrs)
   }
-  parse(data: string): Promise<T> {
+  protected fieldParser: IFieldParser<T>[]
+  parse(data: string[]): Promise<T> {
     return this.transform(data)
   }
-  transform(data: string): Promise<T> {
-    const keys = Object.keys(this.attrs)
-    let rs: any = {}
-    const list: string[] = data.split(this.delimiter)
-    const l = Math.min(list.length, keys.length)
+  transform(data: string[]): Promise<T> {
+    let res: any = {}
+    const l = Math.min(data.length, this.fieldParser.length)
     for (let i = 0; i < l; i++) {
-      const attr = this.attrs[keys[i]]
-      const v = list[i]
-      rs = parse(rs, v, keys[i], attr)
+      this.fieldParser[i].parse(res, this.fieldParser[i].name, data[i])
     }
-    return Promise.resolve(rs)
+    return Promise.resolve(res)
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class DelimiterTransformer<T> extends Delimiter<T> {}
+export class DelimiterTransformer<T> extends CSVTransformer<T> {}
 // tslint:disable-next-line:max-classes-per-file
-export class DelimiterParser<T> extends Delimiter<T> {}
-// tslint:disable-next-line:max-classes-per-file
-export class CSVParser<T> extends Delimiter<T> {}
+export class DelimiterParser<T> extends CSVTransformer<T> {}
+
 // tslint:disable-next-line:max-classes-per-file
 export class FixedLengthTransformer<T> {
   constructor(private attrs: Attributes) {
@@ -431,16 +425,15 @@ export class FixedLengthTransformer<T> {
   }
   transform(data: string): Promise<T> {
     const keys = Object.keys(this.attrs)
-    let rs: any = {}
+    let res: any = {}
     let i = 0
-    for (const key of keys) {
-      const attr = this.attrs[key]
-      const len = attr.length ? attr.length : 10
+    const l = this.fieldParser.length
+    for (let i = 0; i < l; i++) {
+      const len = this.fieldParser[i].length ? this.fieldParser[i].length : 10
       const v = data.substring(i, i + len)
-      rs = parse(rs, v.trim(), key, attr)
-      i = i + len
+      this.fieldParser[i].parse(res, this.fieldParser[i].name, v.trim())
     }
-    return Promise.resolve(rs)
+    return Promise.resolve(res)
   }
 }
 // tslint:disable-next-line:max-classes-per-file
