@@ -77,7 +77,7 @@ export interface Parser<T> {
   parse: (data: string) => Promise<T>
 }
 export interface Transformer<T> {
-  transform: (data: string) => Promise<T>
+  transform: (data: string | string[]) => Promise<T>
 }
 export interface Validator<T> {
   validate: (data: T) => Promise<ErrorMessage[]>
@@ -90,11 +90,11 @@ export interface ErrHandler<T> {
   handleError(rs: T, errors: ErrorMessage[], i?: number, filename?: string): void
 }
 export interface ExHandler {
-  handleException(rs: string, err: any, i?: number, filename?: string): void
+  handleException(res: string | string[], err: any, i?: number, filename?: string): void
 }
 export interface ImportManager {
   filename: string
-  read: AsyncIterable<string>
+  read: AsyncIterable<string> | AsyncIterable<string[]>
   import(): Promise<Result>
 }
 // tslint:disable-next-line:max-classes-per-file
@@ -102,11 +102,11 @@ export class Importer<T> {
   constructor(
     protected skip: number,
     protected filename: string,
-    public read: AsyncIterable<string>,
-    protected transform: (data: string) => Promise<T>,
+    public read: AsyncIterable<string> | AsyncIterable<string[]>,
+    protected transform: (data: string | string[]) => Promise<T>,
     protected write: (obj: T) => Promise<number>,
     protected flush?: () => Promise<number>,
-    protected handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
+    protected handleException?: (res: string | string[], err: any, i?: number, filename?: string) => void,
     protected validate?: (obj: T) => Promise<ErrorMessage[]>,
     protected handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
   ) {
@@ -164,7 +164,7 @@ export class Importer<T> {
       return { total, success }
     }
   }
-  private async validateAndWrite(lastLine: string, total: number, validate: (obj: T) => Promise<ErrorMessage[]>, i: number): Promise<TmpResult> {
+  private async validateAndWrite(lastLine: string | string[], total: number, validate: (obj: T) => Promise<ErrorMessage[]>, i: number): Promise<TmpResult> {
     let success = 0
     for await (const line of this.read) {
       lastLine = line
@@ -203,7 +203,7 @@ export class Importer<T> {
     }
     return { total, success, i }
   }
-  private async transformAndWrite(lastLine: string, total: number, i: number): Promise<TmpResult> {
+  private async transformAndWrite(lastLine: string | string[], total: number, i: number): Promise<TmpResult> {
     let success = 0
     for await (const line of this.read) {
       lastLine = line
@@ -241,7 +241,7 @@ export class ImportService<T> {
   constructor(
     protected skip: number,
     protected filename: string,
-    public read: AsyncIterable<string>,
+    public read: AsyncIterable<string> | AsyncIterable<string[]>,
     protected transformer: Transformer<T>,
     protected writer: Writer<T>,
     protected exceptionHandler?: ExHandler,
@@ -302,7 +302,7 @@ export class ImportService<T> {
       return { total, success }
     }
   }
-  private async validateAndWrite(lastLine: string, total: number, v: Validator<T>, i: number): Promise<TmpResult> {
+  private async validateAndWrite(lastLine: string | string[], total: number, v: Validator<T>, i: number): Promise<TmpResult> {
     let success = 0
     for await (const line of this.read) {
       lastLine = line
@@ -341,7 +341,7 @@ export class ImportService<T> {
     }
     return { total, success, i }
   }
-  private async transformAndWrite(lastLine: string, total: number, i: number): Promise<TmpResult> {
+  private async transformAndWrite(lastLine: string | string[], total: number, i: number): Promise<TmpResult> {
     let success = 0
     for await (const line of this.read) {
       lastLine = line
