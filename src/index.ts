@@ -154,15 +154,15 @@ export class Importer<T> {
   }
   private async validateAndWrite(line: string, validate: (obj: T) => Promise<ErrorMessage[]>, i: number): Promise<number> {
     try {
-      const rs: T = await this.transform(line)
-      const errors = await validate(rs)
+      const res: T = await this.transform(line)
+      const errors = await validate(res)
       if (errors && errors.length > 0) {
         if (this.handleError) {
-          this.handleError(rs, errors, i++, this.filename)
+          this.handleError(res, errors, i++, this.filename)
         }
         return 0
       } else {
-        const r = await this.write(rs)
+        const r = await this.write(res)
         return r > 0 ? 1 : 0
       }
     } catch (err) {
@@ -205,122 +205,69 @@ export class ImportService<T> {
     let total = 0
     let success = 0
     const v = this.validator
-    let lineSkiped = 0
-    const lastLine = ""
     if (v) {
       let i = 0
       if (this.skip > 0) {
         for await (const _line of this.read) {
-          ++lineSkiped
-          if (this.skip === lineSkiped) {
-            const r = await this.validateAndWrite(lastLine, total, v, i)
-            total = r.total
-            success = r.success
-            i = r.i
-            break
+          if (i >= this.skip) {
+            const r = await this.validateAndWrite(_line, v, i)
+            total = total + 1
+            success = success + r
           }
+          i++
         }
-      } else {
-        const r = await this.validateAndWrite(lastLine, total, v, i)
-        total = r.total
-        success = r.success
-        i = r.i
+        if (this.writer.flush) {
+          this.writer.flush()
+        }
       }
       return { total, success }
     } else {
       let i = 0
       for await (const _line of this.read) {
-        ++lineSkiped
-        i++
-        if (this.skip) {
-          if (this.skip === lineSkiped) {
-            const r = await this.transformAndWrite(lastLine, total, i)
-            total = r.total
-            success = r.success
-            i = r.i
-            break
-          }
-        } else {
-          const r = await this.transformAndWrite(lastLine, total, i)
-          total = r.total
-          success = r.success
-          i = r.i
-          break
+        if (i >= this.skip) {
+          const r = await this.transformAndWrite(_line, i)
+          total = total + 1
+          success = success + r
         }
+        i++
+      }
+      if (this.writer.flush) {
+        this.writer.flush()
       }
       return { total, success }
     }
   }
-  private async validateAndWrite(lastLine: string, total: number, v: Validator<T>, i: number): Promise<TmpResult> {
-    let success = 0
-    for await (const line of this.read) {
-      lastLine = line
-      total++
-      try {
-        const rs: T = await this.transformer.transform(line)
-        const errors = await v.validate(rs)
-        if (errors && errors.length > 0) {
-          if (this.errorHandler) {
-            this.errorHandler.handleError(rs, errors, i++, this.filename)
-          }
-        } else {
-          const r = await this.writer.write(rs)
-          if (r > 0) {
-            success = success + r
-          }
-          i++
+  private async validateAndWrite(line: string, v: Validator<T>, i: number): Promise<number> {
+    try {
+      const res: T = await this.transformer.transform(line)
+      const errors = await v.validate(res)
+      if (errors && errors.length > 0) {
+        if (this.errorHandler) {
+          this.errorHandler.handleError(res, errors, i++, this.filename)
         }
-      } catch (err) {
-        if (this.exceptionHandler) {
-          this.exceptionHandler.handleException(line, err, i++, this.filename)
-        }
+        return 0
+      } else {
+        const r = await this.writer.write(res)
+        return r > 0 ? 1 : 0
       }
-    }
-    if (this.writer.flush) {
-      try {
-        const r = await this.writer.flush()
-        if (r > 0) {
-          success = success + r
-        }
-      } catch (err) {
-        if (this.exceptionHandler) {
-          this.exceptionHandler.handleException(lastLine, err, i, this.filename)
-        }
+    } catch (err) {
+      if (this.exceptionHandler) {
+        this.exceptionHandler.handleException(line, err, i++, this.filename)
       }
+      return 0
     }
-    return { total, success, i }
   }
-  private async transformAndWrite(lastLine: string, total: number, i: number): Promise<TmpResult> {
-    let success = 0
-    for await (const line of this.read) {
-      lastLine = line
-      i++
-      total++
-      try {
-        const rs: T = await this.transformer.transform(line)
-        const r = await this.writer.write(rs)
-        if (r > 0) {
-          success = success + r
-        }
-      } catch (err) {
-        if (this.exceptionHandler) {
-          this.exceptionHandler.handleException(line, err, i, this.filename)
-        }
+  private async transformAndWrite(line: string, i: number): Promise<number> {
+    try {
+      const rs: T = await this.transformer.transform(line)
+      const r = await this.writer.write(rs)
+      return r > 0 ? 1 : 0
+    } catch (err) {
+      if (this.exceptionHandler) {
+        this.exceptionHandler.handleException(line, err, i, this.filename)
       }
+      return 0
     }
-    if (this.writer.flush) {
-      try {
-        const r = await this.writer.flush()
-        if (r > 0) {
-          success = success + r
-        }
-      } catch (err) {
-        if (this.exceptionHandler) {
-          this.exceptionHandler.handleException(lastLine, err, i, this.filename)
-        }
-      }
-    }
-    return { total, success, i }
   }
 }
 export function toString(v: any): string {
