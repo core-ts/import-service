@@ -73,11 +73,11 @@ interface TmpResult {
   success: number
   i: number
 }
-export interface Parser<T> {
-  parse: (data: string) => Promise<T>
+export interface Parser<T, S> {
+  parse: (data: S) => Promise<T>
 }
-export interface Transformer<T> {
-  transform: (data: string) => Promise<T>
+export interface Transformer<T, S> {
+  transform: (data: S) => Promise<T>
 }
 export interface Validator<T> {
   validate: (data: T) => Promise<ErrorMessage[]>
@@ -89,8 +89,8 @@ export interface Writer<T> {
 export interface ErrHandler<T> {
   handleError(rs: T, errors: ErrorMessage[], i?: number, filename?: string): void
 }
-export interface ExHandler {
-  handleException(res: string, err: any, i?: number, filename?: string): void
+export interface ExHandler<S> {
+  handleException(res: S, err: any, i?: number, filename?: string): void
 }
 /*
 export interface ImportManager {
@@ -100,17 +100,17 @@ export interface ImportManager {
 }
   */
 // tslint:disable-next-line:max-classes-per-file
-export class Importer<T> {
+export class Importer<T, S> {
   constructor(
     protected skip: number,
     protected filename: string,
-    public read: AsyncIterable<string>,
-    protected transform: (data: string) => Promise<T>,
+    public read: AsyncIterable<S>,
+    protected transform: (data: S) => Promise<T>,
     protected write: (obj: T) => Promise<number>,
     protected flush?: () => Promise<number>,
-    protected handleException?: (res: string, err: any, i?: number, filename?: string) => void,
+    protected handleException?: (res: S, err: any, i?: number, filename?: string) => void,
     protected validate?: (obj: T) => Promise<ErrorMessage[]>,
-    protected handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
+    protected handleError?: (res: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
   ) {
     this.import = this.import.bind(this)
     this.transformAndWrite = this.transformAndWrite.bind(this)
@@ -152,7 +152,7 @@ export class Importer<T> {
       return { total, success }
     }
   }
-  private async validateAndWrite(line: string, validate: (obj: T) => Promise<ErrorMessage[]>, i: number): Promise<number> {
+  private async validateAndWrite(line: S, validate: (obj: T) => Promise<ErrorMessage[]>, i: number): Promise<number> {
     try {
       const res: T = await this.transform(line)
       const errors = await validate(res)
@@ -172,7 +172,7 @@ export class Importer<T> {
       return 0
     }
   }
-  private async transformAndWrite(line: string, i: number): Promise<number> {
+  private async transformAndWrite(line: S, i: number): Promise<number> {
     try {
       const rs: T = await this.transform(line)
       const r = await this.write(rs)
@@ -186,14 +186,14 @@ export class Importer<T> {
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class ImportService<T> {
+export class ImportService<T, S> {
   constructor(
     protected skip: number,
     protected filename: string,
-    public read: AsyncIterable<string>,
-    protected transformer: Transformer<T>,
+    public read: AsyncIterable<S>,
+    protected transformer: Transformer<T, S>,
     protected writer: Writer<T>,
-    protected exceptionHandler?: ExHandler,
+    protected exceptionHandler?: ExHandler<S>,
     protected validator?: Validator<T>,
     protected errorHandler?: ErrHandler<T>,
   ) {
@@ -237,7 +237,7 @@ export class ImportService<T> {
       return { total, success }
     }
   }
-  private async validateAndWrite(line: string, v: Validator<T>, i: number): Promise<number> {
+  private async validateAndWrite(line: S, v: Validator<T>, i: number): Promise<number> {
     try {
       const res: T = await this.transformer.transform(line)
       const errors = await v.validate(res)
@@ -257,7 +257,7 @@ export class ImportService<T> {
       return 0
     }
   }
-  private async transformAndWrite(line: string, i: number): Promise<number> {
+  private async transformAndWrite(line: S, i: number): Promise<number> {
     try {
       const rs: T = await this.transformer.transform(line)
       const r = await this.writer.write(rs)
@@ -338,7 +338,7 @@ export class ErrorHandler<T> {
   }
 }
 // tslint:disable-next-line:max-classes-per-file
-export class ExceptionHandler {
+export class ExceptionHandler<S> {
   constructor(
     public logError: (obj: string, m?: SimpleMap) => void,
     filename?: string,
@@ -360,7 +360,7 @@ export class ExceptionHandler {
   lineNumber: string
   private logFileName: boolean
   private logLineNumber: boolean
-  handleException(rs: string, err: any, i?: number, filename?: string): void {
+  handleException(rs: S, err: any, i?: number, filename?: string): void {
     if (this.logFileName && this.logLineNumber) {
       const ext = clone(this.map)
       if (filename !== undefined) {
