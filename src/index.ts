@@ -47,21 +47,7 @@ export type DataType =
   | "dates"
   | "datetimes"
   | "times"
-export type FormatType = "currency" | "percentage" | "email" | "url" | "phone" | "fax" | "ipv4" | "ipv6"
-export type Operator = "=" | "like" | "!=" | "<>" | ">" | ">=" | "<" | "<="
 
-export interface Model {
-  name?: string
-  attributes: Attributes
-  source?: string
-  table?: string
-  collection?: string
-  // for mongo lowcode
-  sort?: string
-  geo?: string
-  latitude?: string
-  longitude?: string
-}
 export interface Attribute {
   type?: DataType
   required?: boolean
@@ -108,21 +94,21 @@ export interface ExHandler {
 }
 export interface ImportManager {
   filename: string
-  read: readline.Interface
+  read: AsyncIterable<string>
   import(): Promise<Result>
 }
 // tslint:disable-next-line:max-classes-per-file
 export class Importer<T> {
   constructor(
-    public skip: number,
-    public filename: string,
-    public read: readline.Interface,
-    public transform: (data: string) => Promise<T>,
-    public write: (obj: T) => Promise<number>,
-    public flush?: () => Promise<number>,
-    public handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
-    public validate?: (obj: T) => Promise<ErrorMessage[]>,
-    public handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
+    protected skip: number,
+    protected filename: string,
+    public read: AsyncIterable<string>,
+    protected transform: (data: string) => Promise<T>,
+    protected write: (obj: T) => Promise<number>,
+    protected flush?: () => Promise<number>,
+    protected handleException?: (rs: string, err: any, i?: number, filename?: string) => void,
+    protected validate?: (obj: T) => Promise<ErrorMessage[]>,
+    protected handleError?: (rs: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
   ) {
     this.import = this.import.bind(this)
     this.transformAndWrite = this.transformAndWrite.bind(this)
@@ -253,14 +239,14 @@ export class Importer<T> {
 // tslint:disable-next-line:max-classes-per-file
 export class ImportService<T> {
   constructor(
-    public skip: number,
-    public filename: string,
-    public read: readline.Interface,
-    public transformer: Transformer<T>,
-    public writer: Writer<T>,
-    public exceptionHandler?: ExHandler,
-    public validator?: Validator<T>,
-    public errorHandler?: ErrHandler<T>,
+    protected skip: number,
+    protected filename: string,
+    public read: AsyncIterable<string>,
+    protected transformer: Transformer<T>,
+    protected writer: Writer<T>,
+    protected exceptionHandler?: ExHandler,
+    protected validator?: Validator<T>,
+    protected errorHandler?: ErrHandler<T>,
   ) {
     this.import = this.import.bind(this)
     this.validateAndWrite = this.validateAndWrite.bind(this)
@@ -745,7 +731,7 @@ export function mkdirSync(dir: string): void {
     fs.mkdirSync(dir)
   }
 }
-export async function createReader(filename: string, opts?: BufferEncoding): Promise<readline.Interface> {
+export async function createReader(filename: string, opts?: BufferEncoding): Promise<AsyncIterable<string>> {
   const c: BufferEncoding = opts !== undefined ? opts : "utf-8"
   const stream = fs.createReadStream(filename, c)
   await Promise.all([once(stream, "open")])
