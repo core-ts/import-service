@@ -103,19 +103,107 @@ const result = await importer.import()
 console.log(result)
 ```
 
+Result
+
+```ts
+{
+    total: 1200,
+    success: 1198
+}
+```
+
 ### Examples:
 - [import-sample](https://github.com/typescript-sample/import-sample): import a fix-length file to MySql.
 - [import-csv-sample](https://github.com/typescript-sample/import-csv-sample): import a CSV file to MySql.
 ---
 
-# Using ImportService
+# Architecture
 
-`ImportService` follows an object-oriented style similar to Java dependency injection.
+The library consists of several independent building blocks.
 
-```typescript
-const service = new ImportService(
-    1,
-    "customers.csv",
+```
+  Reader
+
+     ↓
+
+Transformer
+
+     ↓
+
+ Validator
+
+     ↓
+
+  Writer
+
+     ↓
+
+   Flush
+```
+
+Each component has a single responsibility.
+
+---
+
+# Readers
+
+The framework consumes data from any `AsyncIterable`.
+
+Examples include
+
+- CSV reader
+- Fixed-length reader
+- Database cursor
+- HTTP stream
+- Kafka
+- RabbitMQ
+- Azure Blob Storage
+- AWS S3
+- Custom readers
+
+Example
+
+```ts
+const reader = await createReader("customers.csv")
+```
+
+---
+
+# Importer
+
+The lightweight functional API.
+
+```ts
+new Importer(
+    skip,
+    filename,
+    reader,
+    transform,
+    write,
+    flush,
+    handleException,
+    validate,
+    handleError
+)
+```
+
+Ideal for
+
+- scripts
+- scheduled jobs
+- serverless
+- small applications
+
+---
+
+# ImportService
+
+The object-oriented API.
+
+```ts
+new ImportService(
+    skip,
+    filename,
     reader,
     transformer,
     writer,
@@ -123,42 +211,92 @@ const service = new ImportService(
     validator,
     errorHandler
 )
+```
 
-await service.import()
+Uses strategy interfaces for better dependency injection and testing.
+
+Ideal for enterprise applications.
+
+### Strategy Interfaces for ImportService
+
+#### Transformer
+
+```ts
+interface Transformer<T,S> {
+    transform(data:S): Promise<T>
+}
 ```
 
 ---
 
-# Using Importer
+#### Validator
 
-`Importer` is a lightweight functional API inspired by JavaScript and Go.
-
-```typescript
-const importer = new Importer(
-    1,
-    filename,
-    reader,
-    transformer.transform,
-    writer.write,
-    writer.flush,
-    handleException,
-    validate,
-    handleError
-)
-
-await importer.import()
+```ts
+interface Validator<T> {
+    validate(data:T): Promise<ErrorMessage[]>
+}
 ```
 
-Choose the API that best matches your programming style.
+---
+
+#### Writer
+
+```ts
+interface Writer<T> {
+    write(data:T): Promise<number>
+    flush?(): Promise<number>
+}
+```
+
+---
+
+# Attributes
+
+CSV attributes
+
+```ts
+const attributes: Attributes = {
+    id: {
+        type: "string"
+    },
+    age: {
+        type: "integer"
+    },
+    active: {
+        type: "boolean"
+    }
+}
+```
+
+---
+
+# FixedLengthAttributes
+
+Fixed-length parsing uses a dedicated attribute definition.
+
+```ts
+const attributes: FixedLengthAttributes = {
+    id: {
+        type: "string",
+        length: 10
+    },
+    balance: {
+        type: "number",
+        length: 15
+    }
+}
+```
+
+Unlike CSV attributes, every field length is required, providing better compile-time safety.
 
 ---
 
 # CSV Transformer
 
-Define a schema.
+Create strongly-typed objects from CSV rows, by schema:
 
 ```typescript
-const attributes = {
+const attributes: Attributes = {
     id: {
         type: "number"
     },
@@ -186,23 +324,34 @@ Each row becomes
 {
     id: 1,
     name: "John",
-    birthday: Date,
+    birthday: Date("..."),
     active: true
 }
 ```
 
+The library automatically converts
+
+- number
+- integer
+- boolean
+- date
+- datetime
+
+according to the attribute definitions.
+
 ---
 
-# Fixed-Length Files
+# FixedLengthTransformer
 
+Fixed-Length Files
 ```
 000001John Smith         19880101Y
 ```
 
-Define field lengths.
+Each field specifies its own length.
 
 ```typescript
-const attrs = {
+const attributes: FixedLengthAttributes = {
     id: {
         type: "number",
         length: 6
@@ -225,75 +374,36 @@ const attrs = {
 Then
 
 ```typescript
-const transformer = new FixedLengthTransformer<Customer>(attrs)
+const transformer = new FixedLengthTransformer<Customer>(attributes)
 ```
 
----
-
-# Validation
-
-Validation is optional.
+Each row becomes
 
 ```typescript
-class CustomerValidator implements Validator<Customer> {
-    async validate(customer) {
-        const errors = []
-        if (!customer.name) {
-            errors.push({
-                field: "name",
-                code: "required"
-            })
-        }
-        return errors
-    }
-
+{
+    id: 1,
+    name: "John",
+    birthday: new Date("..."),
+    active: true
 }
 ```
 
----
+The library automatically converts
 
-# Writer
+- number
+- integer
+- boolean
+- date
+- datetime
 
-```typescript
-class CustomerWriter implements Writer<Customer> {
-    async write(customer) {
-        await repository.save(customer)
-        return 1
-    }
-}
-```
+according to the attribute definitions.
+
 
 ---
 
-# Exception Handling
+## Custom Primitive Parsers
 
-```typescript
-class ImportExceptionHandler implements ExHandler<string[]> {
-    handleException(data, err) {
-        console.error(err)
-    }
-}
-```
-
-Exceptions are separated from validation errors.
-
----
-
-# Validation Error Handling
-
-```typescript
-class ValidationHandler implements ErrHandler<Customer> {
-    handleError(customer, errors) {
-        console.log(errors)
-    }
-}
-```
-
----
-
-# Custom Primitive Parsers
-
-The framework provides default parsers for:
+For CSVTransformer and FixedLengthTransformer, this library provides default parsers for:
 
 - number
 - date
@@ -301,7 +411,7 @@ The framework provides default parsers for:
 
 These parsers are replaceable.
 
-## Boolean
+### Boolean
 
 Default values:
 
@@ -327,7 +437,7 @@ resources.parseBool = (res, key, value) => {
 
 ---
 
-## Number
+### Number
 
 ```typescript
 resources.parseNumber = (res, key, value) => {
@@ -337,7 +447,7 @@ resources.parseNumber = (res, key, value) => {
 
 ---
 
-## Date
+### Date
 
 ```typescript
 resources.parseDate = (res, key, value) => {
@@ -349,47 +459,285 @@ No framework modification is required.
 
 ---
 
-# Reading Files
+# Validation
+
+Validation is optional.
 
 ```typescript
-const reader = await createReader("customers.csv")
+class CustomerValidator implements Validator<Customer> {
+    async validate(customer) {
+        const errors = []
+        if (!customer.name) {
+            errors.push({
+                field: "name",
+                code: "required"
+            })
+        }
+        return errors
+    }
+
+}
 ```
 
-The reader returns an `AsyncIterable`, allowing the framework to process very large files without loading them entirely into memory.
+Only valid records are written.
+
+---
+
+# ErrorHandler
+
+Validation errors are separated from exceptions.
+
+Validation flow
+
+```
+Transformer
+
+     ↓
+
+ Validator
+
+     ↓
+
+ErrorHandler
+```
+
+This library provides the default ErrorHandler<T>
+```typescript
+class ErrorHandler<T> {
+
+    handleError(res: T, err: ErrorMessage[], i?: number, filename?: string): void {
+
+    }
+
+}
+```
+
+User can define a custom ErrorHandler as below
+
+```typescript
+class ValidationHandler implements ErrHandler<Customer> {
+
+    handleError(customer: Customer, errors: ErrorMessage[], i?: number, filename?: string) {
+        console.log(errors)
+    }
+
+}
+```
+
+
+---
+
+# Exception Handling
+
+Exceptions are separated from validation errors.
+
+Exception flow
+
+```
+ Transformer
+
+      ↓
+
+    Writer
+
+      ↓
+
+ExceptionHandler
+```
+
+This distinction makes it easier to process business validation separately from unexpected runtime failures.
+
+This library provides the default ExceptionHandler<string | string[]>
+```typescript
+class ExceptionHandler {
+
+    handleException(res: string | string[], err: any, i?: number, filename?: string): void {
+
+    }
+
+}
+```
+
+User can define a custom ExceptionHandler as below
+
+```typescript
+class ImportExceptionHandler implements ExHandler<string[]> {
+    handleException(res: string[], err: any, i?: number, filename?: string): void {
+        console.error(err)
+    }
+}
+```
+
+---
+# Writer
+
+```typescript
+class CustomerWriter implements Writer<Customer> {
+    async write(customer) {
+        await repository.save(customer)
+        return 1
+    }
+}
+```
 
 ---
 
 # Logging
 
-The library provides
+The library includes a buffered log writer.
 
 ```typescript
-LogWriter
+const writer = new LogWriter("error.log", "./logs")
 ```
 
-for efficient buffered log writing.
+Useful for recording
 
-```typescript
-const writer =
-    new LogWriter(
-        "error.log",
-        "./logs"
-    )
-```
+- validation failures
+- import exceptions
+- rejected records
 
 ---
 
-# Built-in Utilities
+# Utilities
 
-The library also includes helper functions for:
+The package includes a collection of utilities for import applications.
 
-- File readers
-- Date formatting
-- ISO date conversion
-- Filename checking
-- Nullable handling
-- File discovery
-- Directory creation
+## File
+
+- createReader()
+- createWriteStream()
+- mkdirSync()
+
+## Filename
+
+- getDate()
+- getPrefix()
+- NameChecker
+
+## Date
+
+- dateToString()
+- timeToString()
+- toISOString()
+- addDays()
+
+## Parsing
+
+- parseDate()
+- parseNumber()
+- parseNum()
+
+## Object
+
+- handleNullable()
+- reformatDates()
+
+---
+
+# Async Streaming
+
+The library processes records one at a time.
+
+```
+  File
+
+    ↓
+
+  Reader
+
+    ↓
+
+Transformer
+
+    ↓
+
+  Writer
+```
+
+No need to load the entire file into memory.
+
+Suitable for very large datasets.
+
+---
+
+# Enterprise Design
+
+The library follows several enterprise design principles.
+
+- Single Responsibility Principle
+- Strategy Pattern
+- Pipeline Architecture
+- Streaming Processing
+- Dependency Injection
+- Separation of Validation and Exceptions
+
+Each component can be replaced independently.
+
+---
+
+# Performance
+
+Designed for high-throughput imports.
+
+Features include
+
+- AsyncIterable streaming
+- Buffered log writing
+- Minimal object allocation
+- Zero runtime dependencies
+- No unnecessary buffering
+
+---
+
+# Ecosystem
+
+`import-service` works well with other libraries.
+
+```
+CSV / Fixed-Length
+
+       ↓
+
+ import-service
+
+       ↓
+
+   sql-core
+
+       ↓
+
+  mysql2-core
+```
+
+or
+
+```
+      CSV
+
+       ↓
+
+ import-service
+
+       ↓
+
+mongodb-extension
+```
+
+or
+
+```
+     CSV
+
+      ↓
+
+import-service
+
+      ↓
+
+   REST API
+```
+
+The writer can target any destination.
 
 ---
 
@@ -398,34 +746,45 @@ The library also includes helper functions for:
 Most Node.js libraries only parse CSV files.
 
 ```text
-CSV
- │
- ▼
+ CSV
+  │
+  ▼
 Object
 ```
 
-Import Service handles the complete import workflow.
+Unlike many Node.js CSV libraries, **import-service** focuses on the complete import workflow instead of just parsing files.
+
 
 ```text
-File
- │
- ▼
-Reader
- │
- ▼
+  File
+    │
+    ▼
+  Reader
+    │
+    ▼
 Transformer
- │
- ▼
-Validator
- │
- ▼
-Writer
- │
- ▼
-Database
+    │
+    ▼
+ Validator
+    │
+    ▼
+  Writer
+    │
+    ▼
+ Database
 ```
 
-It separates responsibilities, making every stage reusable and independently testable.
+It separates responsibilities, making every stage reusable and independently testable:
+- Streaming readers
+- Typed transformation
+- Validation
+- Error handling
+- Exception handling
+- Pluggable writers
+- CSV support
+- Fixed-length support
+- Enterprise architecture
+
 
 ---
 
@@ -442,6 +801,12 @@ It separates responsibilities, making every stage reusable and independently tes
 
 ---
 
+# Contributing
+
+Contributions, issues, and feature requests are welcome.
+
+---
+
 # License
 
-MIT License.
+MIT
