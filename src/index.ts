@@ -685,7 +685,7 @@ export function reformatDates(obj: any, ignores: string[]): any {
 }
 export function mkdirSync(dir: string): void {
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir)
+    fs.mkdirSync(dir, { recursive: true })
   }
 }
 export async function createReader(filename: string, opts?: BufferEncoding): Promise<AsyncIterable<string>> {

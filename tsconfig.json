@@ -14,8 +14,10 @@
     "removeComments": true,
     "lib": [
       "es6",
-      "es7"
-    ]
+      "es7",
+      "es2018"
+    ],
+    "types": ["node"]
   },
   "include": [
     "src/**/*.ts"

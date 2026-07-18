@@ -1,6 +1,6 @@
 {
   "name": "import-service",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "import-service",
   "main": "./lib/index.js",
   "types": "./src/index.ts",
@@ -20,11 +20,13 @@
     "url": "git@github.com/core-ts/import-service"
   },
   "keywords": [
-    "importer",
-    "import",
-    "import-service",
-    "import-core",
     "ETL",
-    "etl"
+    "etl",
+    "import",
+    "importer",
+    "import-service",
+    "import service",
+    "import-core",
+    "import core"
   ]
 }
