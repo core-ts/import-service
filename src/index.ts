@@ -75,6 +75,12 @@ export interface Attributes {
   [key: string]: Attribute
 }
 
+export interface FixedLengthAttribute extends Attribute {
+  length: number
+}
+export interface FixedLengthAttributes {
+  [key: string]: FixedLengthAttribute
+}
 export interface ErrorMessage {
   field: string
   code: string
@@ -84,11 +90,6 @@ export interface ErrorMessage {
 export interface Result {
   total: number
   success: number
-}
-interface TmpResult {
-  total: number
-  success: number
-  i: number
 }
 export interface Parser<T, S> {
   parse: (data: S) => Promise<T>
@@ -400,11 +401,11 @@ export class ExceptionHandler<S> {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class CSVTransformer<T> {
-  constructor(attrs: Attributes) {
+  constructor(attributes: Attributes) {
     this.transform = this.transform.bind(this)
-    this.fieldParsers = createFieldParsers(attrs)
+    this.fieldParsers = createCSVFieldParsers(attributes)
   }
-  protected fieldParsers: IFieldParser<T>[]
+  protected fieldParsers: ICSVFieldParser<T>[]
   transform(data: string[]): Promise<T> {
     let res: any = {}
     const l = Math.min(data.length, this.fieldParsers.length)
@@ -417,11 +418,11 @@ export class CSVTransformer<T> {
 }
 // tslint:disable-next-line:max-classes-per-file
 export class CSVParser<T> {
-  constructor(attrs: Attributes) {
+  constructor(attributes: Attributes) {
     this.parse = this.parse.bind(this)
-    this.fieldParsers = createFieldParsers(attrs)
+    this.fieldParsers = createCSVFieldParsers(attributes)
   }
-  protected fieldParsers: IFieldParser<T>[]
+  protected fieldParsers: ICSVFieldParser<T>[]
   parse(data: string[]): Promise<T> {
     let res: any = {}
     const l = Math.min(data.length, this.fieldParsers.length)
@@ -432,56 +433,15 @@ export class CSVParser<T> {
     return Promise.resolve(res)
   }
 }
-
-// tslint:disable-next-line:max-classes-per-file
-export class FixedLengthTransformer<T> {
-  constructor(attributes: Attributes) {
-    this.transform = this.transform.bind(this)
-    this.fieldParsers = createFieldParsers(attributes)
-  }
-  protected fieldParsers: IFieldParser<T>[]
-  transform(data: string): Promise<T> {
-    let res: any = {}
-    const l = this.fieldParsers.length
-    for (let i = 0; i < l; i++) {
-      const parser = this.fieldParsers[i]
-      const len = parser.length ? parser.length : 10
-      const v = data.substring(i, i + len)
-      parser.parse(res, parser.name, v.trim())
-    }
-    return Promise.resolve(res)
-  }
-}
-// tslint:disable-next-line:max-classes-per-file
-export class FixedLengthParser<T> {
-  constructor(attributes: Attributes) {
-    this.parse = this.parse.bind(this)
-    this.fieldParsers = createFieldParsers(attributes)
-  }
-  protected fieldParsers: IFieldParser<T>[]
-  parse(data: string): Promise<T> {
-    let res: any = {}
-    const l = this.fieldParsers.length
-    for (let i = 0; i < l; i++) {
-      const parser = this.fieldParsers[i]
-      const len = parser.length ? parser.length : 10
-      const v = data.substring(i, i + len)
-      parser.parse(res, parser.name, v.trim())
-    }
-    return Promise.resolve(res)
-  }
-}
-export interface IFieldParser<T> {
+export interface ICSVFieldParser<T> {
   name: string
-  length: number
   parse(data: T, key: string, v: string): void
 }
-
-export function createFieldParsers<T>(attrs: Attributes): IFieldParser<T>[] {
-  const parsers: IFieldParser<T>[] = []
+export function createCSVFieldParsers<T>(attrs: Attributes): ICSVFieldParser<T>[] {
+  const parsers: ICSVFieldParser<T>[] = []
   for (const key in attrs) {
     const attr = attrs[key]
-    const parser = new FieldParser<T>(key, attr.length ? attr.length : 10)
+    const parser = new CSVFieldParser<T>(key)
 
     if (attr.type === "number" || attr.type === "integer") {
       parser.parse = resources.parseNumber
@@ -496,8 +456,78 @@ export function createFieldParsers<T>(attrs: Attributes): IFieldParser<T>[] {
 
   return parsers
 }
+export class CSVFieldParser<T> implements ICSVFieldParser<T> {
+  constructor(public name: string) {}
+  parse(res: T, key: string, v: string): void {
+    ;(res as any)[key] = v
+  }
+}
 
-export class FieldParser<T> implements IFieldParser<T> {
+// tslint:disable-next-line:max-classes-per-file
+export class FixedLengthTransformer<T> {
+  constructor(attributes: FixedLengthAttributes) {
+    this.transform = this.transform.bind(this)
+    this.fieldParsers = createFixedLengthFieldParsers(attributes)
+  }
+  protected fieldParsers: IFixedLengthFieldParser<T>[]
+  transform(data: string): Promise<T> {
+    let res: any = {}
+    const l = this.fieldParsers.length
+    for (let i = 0; i < l; i++) {
+      const parser = this.fieldParsers[i]
+      const len = parser.length ? parser.length : 10
+      const v = data.substring(i, i + len)
+      parser.parse(res, parser.name, v.trim())
+    }
+    return Promise.resolve(res)
+  }
+}
+
+// tslint:disable-next-line:max-classes-per-file
+export class FixedLengthParser<T> {
+  constructor(attributes: FixedLengthAttributes) {
+    this.parse = this.parse.bind(this)
+    this.fieldParsers = createFixedLengthFieldParsers(attributes)
+  }
+  protected fieldParsers: IFixedLengthFieldParser<T>[]
+  parse(data: string): Promise<T> {
+    let res: any = {}
+    const l = this.fieldParsers.length
+    for (let i = 0; i < l; i++) {
+      const parser = this.fieldParsers[i]
+      const len = parser.length ? parser.length : 10
+      const v = data.substring(i, i + len)
+      parser.parse(res, parser.name, v.trim())
+    }
+    return Promise.resolve(res)
+  }
+}
+export interface IFixedLengthFieldParser<T> {
+  name: string
+  length: number
+  parse(data: T, key: string, v: string): void
+}
+
+export function createFixedLengthFieldParsers<T>(attrs: FixedLengthAttributes): IFixedLengthFieldParser<T>[] {
+  const parsers: IFixedLengthFieldParser<T>[] = []
+  for (const key in attrs) {
+    const attr = attrs[key]
+    const parser = new FixedLengthFieldParser<T>(key, attr.length)
+
+    if (attr.type === "number" || attr.type === "integer") {
+      parser.parse = resources.parseNumber
+    } else if (attr.type === "datetime" || attr.type === "date") {
+      parser.parse = resources.parseDate
+    } else if (attr.type === "boolean") {
+      parser.parse = resources.parseBool
+    }
+
+    parsers.push(parser)
+  }
+
+  return parsers
+}
+export class FixedLengthFieldParser<T> implements IFixedLengthFieldParser<T> {
   constructor(
     public name: string,
     public length: number,
@@ -507,6 +537,7 @@ export class FieldParser<T> implements IFieldParser<T> {
     ;(res as any)[key] = v
   }
 }
+
 export function handleNullable(obj: any, attrs: Attributes): any {
   const keys = Object.keys(obj)
   for (const key of keys) {
