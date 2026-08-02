@@ -668,25 +668,6 @@ Examples:
 
 ---
 
-## Parser
-
-A parser converts raw data into a strongly typed object.
-
-```ts
-interface Parser<T, S> {
-    parse(data: S): Promise<T>
-}
-```
-
-Built-in parsers include:
-
-* CSVParser
-* FixedLengthParser
-
-Applications can implement their own parsers for any format.
-
----
-
 ## Validator
 
 Validates business rules.
@@ -818,18 +799,6 @@ Both APIs integrate seamlessly with the import pipeline.
 
 ---
 
-## CSVParser
-
-`CSVParser` converts CSV rows into strongly typed objects.
-
-```ts
-const parser = new CSVParser<Customer>(attributes)
-
-const customer = await parser.parse(record)
-```
-
----
-
 ## CSVTransformer
 
 `CSVTransformer` implements the `Transformer` interface.
@@ -946,17 +915,6 @@ FixedLength Transformer
 The processing pipeline is identical to CSV.
 
 Only the parser changes.
-
----
-
-# FixedLengthParser
-
-```ts
-const parser =
-    new FixedLengthParser<Customer>(attributes)
-```
-
-Converts fixed-length records into strongly typed objects.
 
 ---
 
