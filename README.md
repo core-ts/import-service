@@ -1033,8 +1033,45 @@ This keeps the processing pipeline simple and avoids unnecessary work during lar
 ---
 
 ## Creating a Validator
+Share the same interface with class `Validator<T>` of [`validation-core`](https://www.npmjs.com/package/validation-core). So, it can work with [`validation-core`](https://www.npmjs.com/package/validation-core) together.
 
-A validator implements the `Validator<T>` interface.
+```ts
+import { Attributes, Validator } from "validation-core"
+
+interface User {
+  id: string
+  username: string
+  email?: string
+}
+
+const userSchema: Attributes = {
+  id: {
+    length: 11,
+  },
+  username2: {
+    length: 10,
+    required: true,
+  },
+  email: {
+    length: 31,
+    required: true,
+    format: "email",
+  },
+}
+
+const user: User = {
+  id: "001",
+  username: "user01",
+  email: "user01@gmail.com",
+}
+
+const validator = new Validator<User>(userSchema)
+validator.validate(user).then((errors) => {
+  console.log(`Errors: ${errors}`)
+})
+```
+
+User can create a custom validator by implementing the `Validator<T>` interface.
 
 ```ts
 class CustomerValidator implements Validator<Customer> {
