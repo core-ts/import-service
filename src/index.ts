@@ -121,6 +121,8 @@ export class Importer<T, S> {
     protected write: (obj: T) => Promise<number>,
     protected flush?: () => Promise<number>,
     protected handleException?: (res: S, err: any, i?: number, filename?: string) => void,
+    protected logInfo?: (msg: string, m?: SimpleMap) => void,
+    protected progressSize: number = 10000,
     protected validate?: (obj: T) => Promise<ErrorMessage[]>,
     protected handleError?: (res: T, errors: ErrorMessage[], i?: number, filename?: string) => void,
   ) {
@@ -132,29 +134,44 @@ export class Importer<T, S> {
     let total = 0
     let success = 0
     const v = this.validate
+    let i = 0
+    let j = 0
+    let k = 0
     if (v) {
-      let i = 0
-      if (this.skip > 0) {
-        for await (const _line of this.read) {
-          if (i >= this.skip) {
-            const r = await this.validateAndWrite(_line, v, i)
-            total = total + 1
-            success = success + r
+      for await (const _line of this.read) {
+        if (i >= this.skip) {
+          const r = await this.validateAndWrite(_line, v, i)
+          total = total + 1
+          success = success + r
+          j++
+          k++
+          if (k >= this.progressSize) {
+            if (this.logInfo) {
+              this.logInfo(`Progress: ${j} records processed of file '${this.filename}'`)
+            }
+            k = 0
           }
-          i++
         }
-        if (this.flush) {
-          await this.flush()
-        }
+        i++
+      }
+      if (this.flush) {
+        await this.flush()
       }
       return { total, success }
     } else {
-      let i = 0
       for await (const _line of this.read) {
         if (i >= this.skip) {
           const r = await this.transformAndWrite(_line, i)
           total = total + 1
           success = success + r
+          j++
+          k++
+          if (k >= this.progressSize) {
+            if (this.logInfo) {
+              this.logInfo(`Progress: ${j} records processed of file '${this.filename}'`)
+            }
+            k = 0
+          }
         }
         i++
       }
@@ -205,7 +222,9 @@ export class ImportService<T, S> {
     public read: AsyncIterable<S>,
     protected transformer: Transformer<T, S>,
     protected writer: Writer<T>,
-    protected exceptionHandler?: ExHandler<S>,
+    protected exceptionHandler: ExHandler<S>,
+    protected logInfo: (msg: string, m?: SimpleMap) => void,
+    protected progressSize: number = 10000,
     protected validator?: Validator<T>,
     protected errorHandler?: ErrHandler<T>,
   ) {
@@ -217,29 +236,40 @@ export class ImportService<T, S> {
     let total = 0
     let success = 0
     const v = this.validator
+    let i = 0
+    let j = 0
+    let k = 0
     if (v) {
-      let i = 0
-      if (this.skip > 0) {
-        for await (const _line of this.read) {
-          if (i >= this.skip) {
-            const r = await this.validateAndWrite(_line, v, i)
-            total = total + 1
-            success = success + r
+      for await (const _line of this.read) {
+        if (i >= this.skip) {
+          const r = await this.validateAndWrite(_line, v, i)
+          total = total + 1
+          success = success + r
+          j++
+          k++
+          if (k >= this.progressSize) {
+            this.logInfo(`Progress: ${j} records processed of file '${this.filename}'`)
+            k = 0
           }
-          i++
         }
-        if (this.writer.flush) {
-          await this.writer.flush()
-        }
+        i++
+      }
+      if (this.writer.flush) {
+        await this.writer.flush()
       }
       return { total, success }
     } else {
-      let i = 0
       for await (const _line of this.read) {
         if (i >= this.skip) {
           const r = await this.transformAndWrite(_line, i)
           total = total + 1
           success = success + r
+          j++
+          k++
+          if (k >= this.progressSize) {
+            this.logInfo(`Progress: ${j} records processed of file '${this.filename}'`)
+            k = 0
+          }
         }
         i++
       }
@@ -263,9 +293,7 @@ export class ImportService<T, S> {
         return r > 0 ? 1 : 0
       }
     } catch (err) {
-      if (this.exceptionHandler) {
-        this.exceptionHandler.handleException(line, err, i++, this.filename)
-      }
+      this.exceptionHandler.handleException(line, err, i++, this.filename)
       return 0
     }
   }
@@ -275,9 +303,7 @@ export class ImportService<T, S> {
       const r = await this.writer.write(rs)
       return r > 0 ? 1 : 0
     } catch (err) {
-      if (this.exceptionHandler) {
-        this.exceptionHandler.handleException(line, err, i, this.filename)
-      }
+      this.exceptionHandler.handleException(line, err, i, this.filename)
       return 0
     }
   }

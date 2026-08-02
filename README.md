@@ -1,8 +1,8 @@
 # import-service
 
-A lightweight, streaming, extensible **TypeScript data-import-library** for building data import pipelines.
+> A high-performance, streaming data import framework for Node.js and TypeScript.
 
-Unlike traditional CSV libraries that only parse files, **Import Service** provides a complete import pipeline:
+`import-service` is a lightweight and extensible framework for building enterprise-grade data import applications. It provides a modular pipeline for reading, transforming, validating, and writing data while maintaining constant memory usage through asynchronous streaming.
 
 ```text
   Reader
@@ -20,28 +20,240 @@ Transformer
  Destination
 ```
 
-It is designed for importing data from **CSV**, **fixed-length files**, **delimited text**, **Excel**, **databases**, **queues**, or any custom data source.
+Unlike traditional CSV parsers, **import-service is not limited to a specific file format**. It is designed as a general-purpose import framework that supports CSV, fixed-length files, and any custom data source that can be exposed as an `AsyncIterable`.
+
+The framework separates each stage of the import process into independent components, allowing developers to customize every part of the pipeline without modifying the framework itself.
 
 ## Detailed Flow
 ![Import flow with data validation](https://cdn-images-1.medium.com/max/800/1*RK_Wzee40zyMBPKogtat7Q.png)
+
+### Examples:
+- [import-sample](https://github.com/typescript-sample/import-sample): import a fix-length file to MySql.
+- [import-csv-sample](https://github.com/typescript-sample/import-csv-sample): import a CSV file to MySql.
+
+---
+
+# Why import-service?
+
+Most Node.js import libraries focus on parsing a particular file format.
+
+For example:
+
+```
+CSV File
+    │
+    ▼
+CSV Parser
+    │
+    ▼
+ Objects
+```
+
+However, real-world enterprise import applications involve much more than parsing.
+
+Typical import workflows include:
+
+* Reading large files
+* Converting raw values into domain objects
+* Validating business rules
+* Writing to destination
+  * Writing to databases
+  * Calling REST APIs
+* Recording rejected records
+* Logging import progress
+* Handling unexpected exceptions
+* Processing millions of records efficiently
+
+`import-service` provides a complete framework for building these workflows.
 
 ---
 
 # Features
 
-- Streaming import using `AsyncIterable`
-- Generic type-safe pipeline
-- CSV transformer
-- Fixed-length record transformer
-- Custom delimiter support
-- Optional validation
-- Pluggable writers
-- Configurable exception handling
-- Configurable validation error handling
-- Automatic type conversion
-- Customizable primitive parsers
-- Large file friendly
-- Zero framework dependency
+## Streaming Processing
+
+Process files using `AsyncIterable` without loading the entire file into memory.
+
+* Constant memory usage
+* Suitable for very large files
+* Supports millions of records
+
+---
+
+## Generic Import Pipeline
+
+The framework separates importing into independent stages.
+
+```
+ Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+Validator (Optional)
+    │
+    ▼
+  Writer
+```
+
+Each stage can be replaced independently.
+
+---
+
+## Multiple File Formats
+
+Built-in support for:
+
+* CSV
+* Fixed-Length Files
+
+The architecture also allows custom formats such as:
+
+* JSON
+* XML
+* Excel
+* Avro
+* Parquet
+* Custom text formats
+
+---
+
+## Automatic Type Conversion
+
+Convert raw string values into strongly typed objects.
+
+Supported types include:
+
+* string
+* number
+* integer
+* boolean
+* date
+* datetime
+
+---
+
+## Validation Pipeline
+
+Validation is completely optional.
+
+When enabled:
+
+```
+ Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+Validator
+    │
+    ▼
+  Writer
+```
+
+When disabled:
+
+```
+ Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+ Writer
+```
+
+The framework automatically selects the appropriate execution pipeline before processing begins.
+
+---
+
+## Pluggable Components
+
+Every stage can be customized.
+
+* Reader
+* Parser
+* Transformer
+* Validator
+* Writer
+* Error Handler
+* Exception Handler
+
+No component depends on a particular database or file format.
+
+---
+
+## Progress Reporting
+
+Monitor long-running imports.
+
+Example:
+
+```
+Importing customers.csv...
+
+Processed 10,000 records...
+Processed 20,000 records...
+Processed 30,000 records...
+```
+
+The reporting interval is configurable.
+
+---
+
+## Enterprise Error Handling
+
+Validation failures and unexpected exceptions are handled independently.
+
+Validation Errors
+
+```
+Transformer
+     │
+     ▼
+ Validator
+     │
+     ▼
+Error Handler
+```
+
+Runtime Exceptions
+
+```
+  Reader
+Transformer
+  Writer
+    │
+    ▼
+Exception Handler
+```
+
+This allows applications to distinguish invalid data from system failures.
+
+---
+
+## Buffered Logging
+
+Built-in buffered logging improves performance during long-running imports while reducing unnecessary disk writes.
+
+---
+
+## TypeScript First
+
+Designed specifically for TypeScript.
+
+* Strong typing
+* Generic interfaces
+* Async/await
+* Modern ES modules
+
+---
+
+## Zero Runtime Dependencies
+
+The framework has no unnecessary runtime dependencies, making it lightweight and easy to integrate into existing applications.
 
 ---
 
@@ -51,130 +263,278 @@ It is designed for importing data from **CSV**, **fixed-length files**, **delimi
 npm install import-service
 ```
 
-or
-
-```bash
-yarn add import-service
-```
-
 ---
 
 # Architecture
 
-```text
-                AsyncIterable
-                      │
-                      ▼
-                ImportService
-                      │
-         ┌────────────┼────────────┐
-         ▼            ▼            ▼
-   Transformer     Validator     Writer
-         │            │            │
-         └────────────┴────────────┘
-                      │
-                 Error Handler
+The framework is built around a modular processing pipeline.
+
+```
+   AsyncIterable
+         │
+         ▼
+    Transformer
+         │
+         ▼
+     Validator (Optional)
+         │
+         ▼
+       Writer
+         │
+         ▼
+       Flush
 ```
 
+Each component has a single responsibility.
 
-Every component is independent.
+| Component   | Responsibility                    |
+| ----------- | --------------------------------- |
+| Reader      | Reads records from any source     |
+| Transformer | Converts raw records into objects |
+| Validator   | Validates business rules          |
+| Writer      | Persists data                     |
+| Flush       | Completes pending writes          |
 
-### Ports and adapters architecture
-
-![Hexagonal Architecture](https://cdn-images-1.medium.com/max/800/1*nMu5_jZJ1omzIB5VK5Lh-w.png)
+Because every stage is independent, applications can replace only the components they need.
 
 ---
 
-# Quick Example
+# Processing Pipeline
 
-```typescript
-const reader = await createReader("customers.csv")
+A typical import workflow looks like this.
 
+```
+       File
+         │
+         ▼
+      Reader
+         │
+         ▼
+    AsyncIterable
+         │
+         ▼
+    Transformer
+         │
+         ▼
+    Domain Object
+         │
+         ▼
+     Validator (Optional)
+         │
+         ▼
+       Writer
+         │
+         ▼
+      Database
+```
+
+The framework itself does not assume any storage technology.
+
+A writer may send data to:
+
+* SQL databases
+* MongoDB
+* Redis
+* REST APIs
+* Message queues
+* Cloud services
+* Another file
+* Any custom destination
+
+---
+
+# Design Philosophy
+
+`import-service` is designed around several core principles.
+
+## Streaming First
+
+Every record is processed individually using `AsyncIterable`.
+
+This keeps memory usage constant regardless of file size.
+
+---
+
+## Separation of Concerns
+
+Reading, transformation, validation, writing, and logging are independent responsibilities.
+
+Each component can evolve independently.
+
+---
+
+## Extensibility
+
+The framework depends on abstractions rather than implementations.
+
+Applications can replace any stage without modifying the framework.
+
+---
+
+## Performance
+
+The framework is optimized for processing very large datasets.
+
+Instead of checking whether validation exists for every record, the execution path is selected once before processing begins.
+
+Validation enabled:
+
+```
+ Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+Validator
+    │
+    ▼
+ Writer
+```
+
+Validation disabled:
+
+```
+ Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+  Writer
+```
+
+This avoids unnecessary conditional checks inside the hot processing loop while keeping each execution path specialized for its task.
+
+---
+
+# Quick Start
+
+The simplest import application consists of four steps.
+
+1. Create a reader.
+2. Transform each record.
+3. Write the result.
+4. Execute the importer.
+
+```ts
 const importer = new Importer(
     1,
     "customers.csv",
     reader,
-    transformer.transform,
-    writer.write
+    transformer,
+    writer,
+    writer.flush
 )
 
 const result = await importer.import()
-
-console.log(result)
 ```
 
-Result
+Example result:
 
 ```ts
 {
-    total: 1200,
-    success: 1198
+    total: 100000,
+    success: 99987
 }
 ```
 
-### Examples:
-- [import-sample](https://github.com/typescript-sample/import-sample): import a fix-length file to MySql.
-- [import-csv-sample](https://github.com/typescript-sample/import-csv-sample): import a CSV file to MySql.
 ---
 
-# Architecture
+# Two Programming Models
 
-The library consists of several independent building blocks.
+The framework provides two APIs.
 
-```
-  Reader
+## Importer
 
-     ↓
+A lightweight functional API.
 
-Transformer
+Ideal for:
 
-     ↓
+* Scripts
+* Scheduled jobs
+* Serverless functions
+* Small applications
+* Javascript or GO developers
 
- Validator
+---
 
-     ↓
+## ImportService
 
-  Writer
+An object-oriented API based on strategy interfaces.
 
-     ↓
+Ideal for:
 
-   Flush
-```
+* Enterprise applications
+* Dependency Injection
+* Unit testing
+* Large project
+* Java developers
 
-Each component has a single responsibility.
+Both APIs share the same processing pipeline while supporting different development styles.
 
 ---
 
 # Readers
 
-The framework consumes data from any `AsyncIterable`.
+The framework processes data from any source that implements `AsyncIterable`.
 
-Examples include
+This design makes `import-service` independent of file formats, storage systems, and transport protocols.
 
-- CSV reader
-- Fixed-length reader
-- Database cursor
-- HTTP stream
-- Kafka
-- RabbitMQ
-- Azure Blob Storage
-- AWS S3
-- Custom readers
+Typical readers include:
 
-Example
+* CSV files
+* Fixed-length files
+* Database cursors
+* REST APIs
+* Message queues
+* Cloud storage
+* Custom readers
+
+```
+ CSV File
+      │
+      ▼
+ CSV Reader
+      │
+      ▼
+AsyncIterable
+```
+
+```
+Database Cursor
+      │
+      ▼
+AsyncIterable
+```
+
+```
+  REST API
+      │
+      ▼
+AsyncIterable
+```
+
+Every reader produces the same output type:
 
 ```ts
-const reader = await createReader("customers.csv")
+AsyncIterable<S>
 ```
+
+Once data becomes an `AsyncIterable`, the remainder of the import pipeline is identical.
+
+This makes the framework highly reusable.
 
 ---
 
 # Importer
 
-The lightweight functional API.
+`Importer` is the lightweight functional API.
+
+Instead of implementing multiple interfaces, applications simply provide functions.
 
 ```ts
-new Importer(
+const importer = new Importer(
     skip,
     filename,
     reader,
@@ -182,81 +542,318 @@ new Importer(
     write,
     flush,
     handleException,
+    logInfo,
+    progressSize,
     validate,
     handleError
 )
 ```
 
-Ideal for
+This API is ideal for:
 
-- scripts
-- scheduled jobs
-- serverless
-- small applications
+* Scheduled jobs
+* Small applications
+* Scripts
+* CLI tools
+* Serverless functions
+
+Because it only requires functions, it has very little setup code.
+
+---
+
+## Import Flow
+
+Without validation
+
+```
+  Read
+    │
+    ▼
+Transform
+    │
+    ▼
+  Write
+```
+
+With validation
+
+```
+  Read
+    │
+    ▼
+Transform
+    │
+    ▼
+Validate
+    │
+    ▼
+  Write
+```
+
+The execution path is selected once before processing begins.
 
 ---
 
 # ImportService
 
-The object-oriented API.
+`ImportService` provides the same functionality using strategy interfaces.
 
 ```ts
-new ImportService(
+const service = new ImportService(
     skip,
     filename,
     reader,
     transformer,
     writer,
     exceptionHandler,
+    logInfo,
+    progressSize,
     validator,
     errorHandler
 )
 ```
 
-Uses strategy interfaces for better dependency injection and testing.
+This API is recommended for:
 
-Ideal for enterprise applications.
+* Enterprise applications
+* Layered architecture
+* Dependency Injection
+* Unit testing
+* Large development teams
 
-### Strategy Interfaces for ImportService
-
-#### Transformer
-
-```ts
-interface Transformer<T,S> {
-    transform(data:S): Promise<T>
-}
-```
+Each responsibility is implemented as an independent service.
 
 ---
 
-#### Validator
+# Strategy Interfaces
+
+The framework depends on abstractions instead of concrete implementations.
+
+```
+  Reader
+
+    ↓
+
+Transformer
+
+    ↓
+
+ Validator
+
+    ↓
+
+  Writer
+```
+
+Each interface has a single responsibility.
+
+---
+
+## Transformer
+
+Transforms raw input into a domain object.
+
+```ts
+interface Transformer<T, S> {
+    transform(data: S): Promise<T>
+}
+```
+
+Examples:
+
+* CSV row → Customer
+* Fixed-length record → Product
+* JSON → Order
+* XML → Employee
+
+---
+
+## Parser
+
+A parser converts raw data into a strongly typed object.
+
+```ts
+interface Parser<T, S> {
+    parse(data: S): Promise<T>
+}
+```
+
+Built-in parsers include:
+
+* CSVParser
+* FixedLengthParser
+
+Applications can implement their own parsers for any format.
+
+---
+
+## Validator
+
+Validates business rules.
 
 ```ts
 interface Validator<T> {
-    validate(data:T): Promise<ErrorMessage[]>
+    validate(data: T): Promise<ErrorMessage[]>
 }
 ```
 
+Typical validation includes:
+
+* Required fields
+* Duplicate records
+* Business rules
+* Data consistency
+* Referential integrity
+
+Validation is completely optional.
+
 ---
 
-#### Writer
+## Writer
+
+Persists imported data.
 
 ```ts
 interface Writer<T> {
-    write(data:T): Promise<number>
+    write(data: T): Promise<number>
+
     flush?(): Promise<number>
 }
 ```
 
+A writer may store data in:
+
+* SQL databases
+* MongoDB
+* Redis
+* REST APIs
+* Kafka
+* RabbitMQ
+* Files
+* Cloud services
+
+The framework is storage-independent.
+
 ---
 
-# Attributes
+## ErrorHandler
 
-CSV attributes
+Processes validation failures.
 
 ```ts
-const attributes: Attributes = {
+interface ErrorHandler<T> {
+    handleError(
+        data: T,
+        errors: ErrorMessage[]
+    ): Promise<void>
+}
+```
+
+Typical implementations:
+
+* Error log
+* CSV reject file
+* Database table
+* Monitoring system
+
+---
+
+## ExceptionHandler
+
+Processes unexpected runtime errors.
+
+```ts
+interface ExceptionHandler<S> {
+    handleException(
+        data: S,
+        error: any
+    ): Promise<void>
+}
+```
+
+Examples:
+
+* Database connection failure
+* Network timeout
+* Unexpected parser exception
+* Invalid file format
+
+Validation errors and runtime exceptions are intentionally handled separately.
+
+---
+
+# CSV Support
+
+The framework includes built-in support for CSV files.
+
+```
+CSV File
+    │
+    ▼
+CSV Reader
+    │
+    ▼
+CSV Parser
+    │
+    ▼
+ Customer
+```
+
+or
+
+```
+CSV File
+    │
+    ▼
+CSV Reader
+    │
+    ▼
+CSV Transformer
+    │
+    ▼
+ Customer
+```
+
+Both APIs integrate seamlessly with the import pipeline.
+
+---
+
+## CSVParser
+
+`CSVParser` converts CSV rows into strongly typed objects.
+
+```ts
+const parser = new CSVParser<Customer>(attributes)
+
+const customer = await parser.parse(record)
+```
+
+---
+
+## CSVTransformer
+
+`CSVTransformer` implements the `Transformer` interface.
+
+```ts
+const transformer = new CSVTransformer<Customer>(attributes)
+```
+
+This allows CSV records to be used directly with `ImportService`.
+
+---
+
+# CSV Attributes
+
+CSV parsing is driven by attribute definitions.
+
+Example:
+
+```ts
+const attributes = {
     id: {
+        type: "string"
+    },
+    name: {
         type: "string"
     },
     age: {
@@ -264,549 +861,828 @@ const attributes: Attributes = {
     },
     active: {
         type: "boolean"
-    }
-}
-```
-
----
-
-# FixedLengthAttributes
-
-Fixed-length parsing uses a dedicated attribute definition.
-
-```ts
-const attributes: FixedLengthAttributes = {
-    id: {
-        type: "string",
-        length: 10
     },
-    balance: {
-        type: "number",
-        length: 15
-    }
-}
-```
-
-Unlike CSV attributes, every field length is required, providing better compile-time safety.
-
----
-
-# CSV Transformer
-
-Create strongly-typed objects from CSV rows, by schema:
-
-```typescript
-const attributes: Attributes = {
-    id: {
+    salary: {
         type: "number"
-    },
-    name: {
-        type: "string"
     },
     birthday: {
         type: "date"
-    },
-    active: {
-        type: "boolean"
     }
 }
 ```
 
-Create a transformer.
+Attributes define how each field should be converted.
 
-```typescript
-const transformer = new CSVTransformer<Customer>(attributes)
+---
+
+# Automatic Type Conversion
+
+The framework automatically converts string values into strongly typed properties.
+
+Supported types include:
+
+* string
+* number
+* integer
+* boolean
+* date
+* datetime
+
+Example CSV
+
+```csv
+1001,John,true,30,1500.75,2025-01-01
 ```
 
-Each row becomes
+becomes
 
-```typescript
+```ts
 {
-    id: 1,
+    id: "1001",
     name: "John",
-    birthday: Date("..."),
-    active: true
+    active: true,
+    age: 30,
+    salary: 1500.75,
+    birthday: new Date(...)
 }
 ```
 
-The library automatically converts
+No manual conversion code is required.
 
-- number
-- integer
-- boolean
-- date
-- datetime
+---
 
-according to the attribute definitions.
+# Fixed-Length Support
+
+In addition to CSV, the framework provides first-class support for fixed-length files.
+
+```
+Fixed-Length File
+        │
+        ▼
+FixedLength Reader
+        │
+        ▼
+FixedLength Parser
+        │
+        ▼
+     Customer
+```
+
+or
+
+```
+Fixed-Length File
+        │
+        ▼
+FixedLength Reader
+        │
+        ▼
+FixedLength Transformer
+        │
+        ▼
+     Customer
+```
+
+The processing pipeline is identical to CSV.
+
+Only the parser changes.
+
+---
+
+# FixedLengthParser
+
+```ts
+const parser =
+    new FixedLengthParser<Customer>(attributes)
+```
+
+Converts fixed-length records into strongly typed objects.
 
 ---
 
 # FixedLengthTransformer
 
-Fixed-Length Files
-```
-000001John Smith         19880101Y
+```ts
+const transformer =
+    new FixedLengthTransformer<Customer>(attributes)
 ```
 
-Each field specifies its own length.
+Integrates fixed-length records directly into the import pipeline.
 
-```typescript
-const attributes: FixedLengthAttributes = {
+---
+
+# FixedLengthAttributes
+
+Fixed-length parsing uses a dedicated metadata model.
+
+```ts
+const attributes = {
     id: {
-        type: "number",
-        length: 6
+        type: "string",
+        length: 10
     },
+
     name: {
         type: "string",
-        length: 20
+        length: 40
     },
-    birthday: {
-        type: "date",
-        length: 8
+
+    age: {
+        type: "integer",
+        length: 3
     },
-    active: {
-        type: "boolean",
-        length: 1
+
+    salary: {
+        type: "number",
+        length: 12
     }
 }
 ```
 
-Then
+Unlike CSV attributes, every field specifies its length.
 
-```typescript
-const transformer = new FixedLengthTransformer<Customer>(attributes)
-```
+Separating `FixedLengthAttributes` from CSV attributes provides:
 
-Each row becomes
+* Better compile-time safety
+* Cleaner APIs
+* Clearer intent
+* Independent evolution of file formats
 
-```typescript
-{
-    id: 1,
-    name: "John",
-    birthday: new Date("..."),
-    active: true
-}
-```
-
-The library automatically converts
-
-- number
-- integer
-- boolean
-- date
-- datetime
-
-according to the attribute definitions.
-
+Each format has its own metadata model while sharing the same import architecture.
 
 ---
 
-## Custom Primitive Parsers
+# CSVFieldParser
 
-For CSVTransformer and FixedLengthTransformer, this library provides default parsers for:
+CSV values are converted using `CSVFieldParser`.
 
-- number
-- date
-- boolean
+It is responsible for converting individual field values according to their attribute definitions.
 
-These parsers are replaceable.
+Examples include:
 
-### Boolean
-
-Default values:
-
-```
-1
-Y
-T
-```
-
-become
-
-```
-true
-```
-
-You can replace the parser globally.
-
-```typescript
-resources.parseBool = (res, key, value) => {
-    res[key] = value === "true" || value === "TRUE"
-}
-```
+* String
+* Number
+* Integer
+* Boolean
+* Date
+* DateTime
 
 ---
 
-### Number
+# FixedLengthFieldParser
 
-```typescript
-resources.parseNumber = (res, key, value) => {
-    res[key] = Number(value.replace(",", "."))
-}
-```
+Fixed-length records use a dedicated `FixedLengthFieldParser`.
 
----
+Although it performs similar type conversions, it is separated from `CSVFieldParser` so each format can evolve independently.
 
-### Date
-
-```typescript
-resources.parseDate = (res, key, value) => {
-    res[key] = dayjs(value, "DD/MM/YYYY").toDate()
-}
-```
-
-No framework modification is required.
+Future enhancements such as alignment, padding, packed decimal formats, or custom encodings can be added without affecting CSV processing.
 
 ---
 
 # Validation
 
-Validation is optional.
+Validation is an optional stage of the import pipeline.
 
-```typescript
+When validation is enabled, every transformed object is validated before it is written.
+
+```text
+  Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+ Validator
+    │
+    ▼
+  Writer
+```
+
+When validation is not required, the framework automatically switches to a dedicated execution pipeline.
+
+```text
+  Reader
+    │
+    ▼
+Transformer
+    │
+    ▼
+  Writer
+```
+
+This keeps the processing pipeline simple and avoids unnecessary work during large imports.
+
+---
+
+## Creating a Validator
+
+A validator implements the `Validator<T>` interface.
+
+```ts
 class CustomerValidator implements Validator<Customer> {
-    async validate(customer) {
-        const errors = []
+
+    async validate(customer: Customer): Promise<ErrorMessage[]> {
+        const errors: ErrorMessage[] = []
+
         if (!customer.name) {
             errors.push({
                 field: "name",
-                code: "required"
+                code: "required",
+                message: "Customer name is required."
             })
         }
+
+        if (customer.age < 18) {
+            errors.push({
+                field: "age",
+                code: "invalid",
+                message: "Customer must be at least 18 years old."
+            })
+        }
+
         return errors
     }
 
 }
 ```
 
-Only valid records are written.
+Returning an empty array indicates that the record is valid.
 
 ---
 
-# ErrorHandler
+## Validation Flow
 
-Validation errors are separated from exceptions.
-
-Validation flow
-
-```
+```text
+ Record
+    ↓
 Transformer
-
-     ↓
-
+    ↓
  Validator
-
-     ↓
-
-ErrorHandler
+    ↓
+  Valid ?
+    ├── Yes → Writer
+    └── No  → ErrorHandler
 ```
 
-This library provides the default ErrorHandler<T>
-```typescript
-class ErrorHandler<T> {
+This separation allows invalid records to be processed without interrupting the import.
 
-    handleError(res: T, err: ErrorMessage[], i?: number, filename?: string): void {
+---
 
-    }
+# Error Handling
 
-}
-```
+Business validation failures are handled by an `ErrorHandler`.
 
-User can define a custom ErrorHandler as below
+```ts
+class CustomerErrorHandler
+implements ErrorHandler<Customer> {
 
-```typescript
-class ValidationHandler implements ErrHandler<Customer> {
+    async handleError(
+        customer: Customer,
+        errors: ErrorMessage[]
+    ): Promise<void> {
 
-    handleError(customer: Customer, errors: ErrorMessage[], i?: number, filename?: string) {
+        console.log(customer)
         console.log(errors)
+
     }
 
 }
 ```
 
+Typical implementations include:
+
+* Reject files
+* Error tables
+* Audit logs
+* Monitoring systems
+* Notification services
+
+Validation errors do not stop the import process.
 
 ---
 
 # Exception Handling
 
-Exceptions are separated from validation errors.
+Unexpected runtime failures are handled independently from validation errors.
 
-Exception flow
+Examples include:
 
-```
- Transformer
+* File access errors
+* Network failures
+* Database exceptions
+* Parser exceptions
+* Unexpected runtime errors
 
-      ↓
+```text
+  Reader
 
-    Writer
+    ↓
 
-      ↓
+Transformer
+
+    ↓
+
+  Writer
+
+    ↓
 
 ExceptionHandler
 ```
 
-This distinction makes it easier to process business validation separately from unexpected runtime failures.
+---
 
-This library provides the default ExceptionHandler<string | string[]>
-```typescript
-class ExceptionHandler {
+## Creating an ExceptionHandler
 
-    handleException(res: string | string[], err: any, i?: number, filename?: string): void {
+```ts
+class CustomerExceptionHandler
+implements ExceptionHandler<string[]> {
+
+    async handleException(
+        record: string[],
+        error: any
+    ): Promise<void> {
+
+        console.error(error)
 
     }
 
 }
 ```
 
-User can define a custom ExceptionHandler as below
-
-```typescript
-class ImportExceptionHandler implements ExHandler<string[]> {
-    handleException(res: string[], err: any, i?: number, filename?: string): void {
-        console.error(err)
-    }
-}
-```
+Separating validation failures from runtime exceptions allows applications to respond appropriately to each type of problem.
 
 ---
-# Writer
 
-```typescript
-class CustomerWriter implements Writer<Customer> {
-    async write(customer) {
-        await repository.save(customer)
-        return 1
-    }
-}
+# Progress Reporting
+
+Large imports can take several minutes or even hours.
+
+The framework provides configurable progress reporting so operators can monitor long-running jobs.
+
+Example output:
+
+```text
+Import started...
+
+Processed 10,000 records...
+Processed 20,000 records...
+Processed 30,000 records...
+Processed 40,000 records...
+
+Import completed.
 ```
+
+The reporting interval is configurable.
+
+```ts
+const progressSize = 10000
+```
+
+Applications may choose any interval depending on file size and operational requirements.
+
+Typical values:
+
+| Records | Usage              |
+| ------- | ------------------ |
+| 1,000   | Development        |
+| 10,000  | Production         |
+| 100,000 | Very large imports |
 
 ---
 
 # Logging
 
-The library includes a buffered log writer.
+`import-service` includes a buffered log writer for high-throughput import jobs.
 
-```typescript
-const writer = new LogWriter("error.log", "./logs")
+Unlike writing directly to a file for every record, buffered logging reduces disk I/O and improves performance.
+
+Typical uses include:
+
+* Validation failures
+* Runtime exceptions
+* Rejected records
+* Import summaries
+* Audit logs
+
+Example:
+
+```ts
+const logger = new LogWriter(
+    "customers-error.log",
+    "./logs"
+)
 ```
-
-Useful for recording
-
-- validation failures
-- import exceptions
-- rejected records
 
 ---
 
-# Utilities
+# Utility Functions
 
-The package includes a collection of utilities for import applications.
+The framework includes utility functions commonly required by import applications.
 
-## File
+## File Utilities
 
-- createReader()
-- createWriteStream()
-- mkdirSync()
-
-## Filename
-
-- getDate()
-- getPrefix()
-- NameChecker
-
-## Date
-
-- dateToString()
-- timeToString()
-- toISOString()
-- addDays()
-
-## Parsing
-
-- parseDate()
-- parseNumber()
-- parseNum()
-
-## Object
-
-- handleNullable()
-- reformatDates()
+* Create readers
+* Create write streams
+* Create directories
 
 ---
 
-# Async Streaming
+## Filename Utilities
 
-The library processes records one at a time.
+Utilities for working with import filenames.
 
-```
-  File
+Examples include:
 
-    ↓
+* Extract dates
+* Validate filename patterns
+* Read filename prefixes
 
-  Reader
+Example:
 
-    ↓
-
-Transformer
-
-    ↓
-
-  Writer
+```text
+customers_20250101.csv
 ```
 
-No need to load the entire file into memory.
+↓
 
-Suitable for very large datasets.
+```text
+Date: 2025-01-01
+Prefix: customers
+```
 
 ---
 
-# Enterprise Design
+## Date Utilities
 
-The library follows several enterprise design principles.
+Functions for working with dates.
 
-- Single Responsibility Principle
-- Strategy Pattern
-- Pipeline Architecture
-- Streaming Processing
-- Dependency Injection
-- Separation of Validation and Exceptions
+Examples include:
 
-Each component can be replaced independently.
+* Parse dates
+* Format dates
+* ISO conversion
+* Date arithmetic
+
+---
+
+## Parsing Utilities
+
+Common parsing helpers.
+
+Examples include:
+
+* Number parsing
+* Integer parsing
+* Date parsing
+* Nullable values
+
+---
+
+## Object Utilities
+
+Utilities for working with imported objects.
+
+Examples include:
+
+* Nullable handling
+* Date normalization
+* Object formatting
 
 ---
 
 # Performance
 
-Designed for high-throughput imports.
+`import-service` is designed for processing very large datasets.
 
-Features include
+The framework emphasizes predictable performance while maintaining a clean programming model.
 
-- AsyncIterable streaming
-- Buffered log writing
-- Minimal object allocation
-- Zero runtime dependencies
-- No unnecessary buffering
+Performance features include:
+
+* Streaming with `AsyncIterable`
+* Constant memory usage
+* Buffered logging
+* Configurable progress reporting
+* Minimal object allocation
+* Zero runtime dependencies
+
+---
+
+## Specialized Execution Paths
+
+Rather than checking whether validation exists for every record, the framework selects the execution pipeline once before processing begins.
+
+Validation enabled
+
+```text
+ Reader
+
+    ↓
+
+Transformer
+
+    ↓
+
+ Validator
+
+    ↓
+
+  Writer
+```
+
+Validation disabled
+
+```text
+ Reader
+
+    ↓
+
+Transformer
+
+    ↓
+
+  Writer
+```
+
+This avoids repeated conditional checks inside the hot processing loop while keeping each execution path specialized.
+
+Although this approach introduces additional implementation code, it minimizes work performed for every imported record, making it better suited for processing hundreds of thousands or millions of records.
+
+---
+
+## Constant Memory Usage
+
+Records are processed one at a time.
+
+```text
+  File
+
+    ↓
+
+ Reader
+
+    ↓
+
+One Record
+
+    ↓
+
+Transformer
+
+    ↓
+
+  Writer
+```
+
+The framework never loads the entire file into memory.
+
+Memory consumption remains nearly constant regardless of file size.
+
+---
+
+# Design Principles
+
+The architecture follows several fundamental design principles.
+
+## Single Responsibility Principle
+
+Every component has exactly one responsibility.
+
+* Reader
+* Transformer
+* Validator
+* Writer
+* ErrorHandler
+* ExceptionHandler
+
+---
+
+## Pipeline Architecture
+
+Each stage performs one task before passing the result to the next stage.
+
+```text
+ Reader
+
+    ↓
+
+Transformer
+
+    ↓
+
+ Validator
+
+    ↓
+
+  Writer
+```
+
+---
+
+## Strategy Pattern
+
+Applications provide implementations for the required interfaces.
+
+This allows each stage to be replaced independently.
+
+---
+
+## Streaming First
+
+Every processing stage is built around `AsyncIterable`.
+
+Streaming enables:
+
+* Large file imports
+* Constant memory usage
+* Better scalability
+
+---
+
+## Extensibility
+
+The framework depends on abstractions instead of implementations.
+
+Applications can easily support:
+
+* New file formats
+* New storage technologies
+* New validation rules
+* Custom writers
+* Custom logging
+
+without changing the framework itself.
+
+---
+
+# Example Architectures
+
+## Import CSV into PostgreSQL
+
+```text
+ CSV File
+     ↓
+ CSV Reader
+     ↓
+CSVTransformer
+     ↓
+ Validator
+     ↓
+PostgreSQL Writer
+```
+
+---
+
+## Import Fixed-Length File into MySQL
+
+```text
+  Fixed-Length File
+         ↓
+  FixedLengthReader
+         ↓
+FixedLengthTransformer
+         ↓
+     Validator
+         ↓
+    MySQL Writer
+```
+
+---
+
+## Import CSV into MongoDB
+
+```text
+  CSV File
+      ↓
+CSVTransformer
+      ↓
+MongoDB Writer
+```
+
+---
+
+## Import CSV through a REST API
+
+```text
+  CSV File
+      ↓
+CSVTransformer
+      ↓
+ REST Writer
+      ↓
+Remote Service
+```
+
+The framework is independent of the destination system.
 
 ---
 
 # Ecosystem
 
-`import-service` works well with other libraries.
+`import-service` is designed to work with other TypeScript libraries.
 
-```
+Typical data pipeline:
+
+```text
 CSV / Fixed-Length
-
        ↓
-
  import-service
-
        ↓
-
-   sql-core
-
+    sql-core
        ↓
-
-  mysql2-core
+   mysql2-core
 ```
 
 or
 
-```
-      CSV
-
-       ↓
-
- import-service
-
-       ↓
-
-mongodb-extension
-```
-
-or
-
-```
+```text
      CSV
-
       ↓
-
 import-service
-
       ↓
+ mysql2-core
+      ↓
+  Database
+```
 
+or
+
+```text
+     CSV
+      ↓
+import-service
+      ↓
    REST API
 ```
 
-The writer can target any destination.
+The writer determines where imported data is sent.
 
 ---
 
-# Why Import Service?
+# Roadmap
 
-Most Node.js libraries only parse CSV files.
+Future enhancements may include:
 
-```text
- CSV
-  │
-  ▼
-Object
-```
-
-Unlike many Node.js CSV libraries, **import-service** focuses on the complete import workflow instead of just parsing files.
-
-
-```text
-  File
-    │
-    ▼
-  Reader
-    │
-    ▼
-Transformer
-    │
-    ▼
- Validator
-    │
-    ▼
-  Writer
-    │
-    ▼
- Database
-```
-
-It separates responsibilities, making every stage reusable and independently testable:
-- Streaming readers
-- Typed transformation
-- Validation
-- Error handling
-- Exception handling
-- Pluggable writers
-- CSV support
-- Fixed-length support
-- Enterprise architecture
-
+* Excel support
+* JSON support
+* XML support
+* Avro support
+* Parquet support
+* Batch writers
+* Parallel processing
+* Import statistics
+* Progress callbacks
+* Import cancellation
+* Resume interrupted imports
 
 ---
 
-# Design Goals
+# Ecosystem Integration
 
-- Streaming first
-- Generic
-- Type-safe
-- Framework independent
-- High performance
-- Easily testable
-- Extensible
-- Familiar to both Java and JavaScript developers
+This sample demonstrates how several [**core-ts**](https://github.com/core-ts) libraries work together.
+
+| Library                                                            | Purpose                             |
+|--------------------------------------------------------------------|-------------------------------------|
+| [`config-plus`](https://www.npmjs.com/package/config-plus)         | Configuration management            |
+| [`logger-core`](https://www.npmjs.com/package/logger-core)         | Structured logging                  |
+| [`validation-core`](https://www.npmjs.com/package/validation-core) | High-performance validation library |
+| [`import-service`](https://www.npmjs.com/package/import-service)   | Streaming import framework          |
+| [`sql-core`](https://www.npmjs.com/package/sql-core)               | SQL abstraction                     |
+| [`mysql2-core`](https://www.npmjs.com/package/mysql2-core)         | MySQL implementation                |
+| [`postgres-kit`](https://www.npmjs.com/package/postgres-kit)       | PostgreSQL implementation           |
+| [`mongodb-kit`](https://www.npmjs.com/package/mongodb-kit)         | Generic MongoDB repositories        |
+
+
+
+Each library focuses on a single responsibility.
+
+That demonstrates the intended layering very well.
 
 ---
 
 # Contributing
 
-Contributions, issues, and feature requests are welcome.
+Contributions, bug reports, feature requests, and pull requests are welcome.
+
+If you would like to contribute:
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Implement your changes.
+4. Add or update tests.
+5. Submit a pull request.
 
 ---
 
 # License
 
-MIT
+MIT License.
+
+---
+
+# Conclusion
+
+`import-service` is more than a CSV parser.
+
+It is a high-performance, streaming import framework that separates reading, transformation, validation, writing, and error handling into independent, reusable components.
+
+Whether importing thousands of records from a CSV file or millions of records from multiple data sources, `import-service` provides a flexible, extensible, and performance-oriented architecture for building enterprise-grade data import applications.

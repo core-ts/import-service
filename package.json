@@ -1,7 +1,7 @@
 {
   "name": "import-service",
-  "version": "0.2.5",
-  "description": "import-service",
+  "version": "0.2.6",
+  "description": "import-service is a lightweight and extensible framework for building enterprise-grade data import applications",
   "main": "./lib/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -26,7 +26,7 @@
     "importer",
     "import-service",
     "import service",
-    "import-core",
-    "import core"
+    "import-kit",
+    "import kit"
   ]
 }
