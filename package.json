@@ -1,6 +1,6 @@
 {
   "name": "import-service",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "import-service is a lightweight and extensible framework for building enterprise-grade data import applications",
   "main": "./lib/index.js",
   "types": "./src/index.ts",

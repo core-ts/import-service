@@ -2,6 +2,7 @@ import { once } from "events"
 import * as fs from "fs"
 import { WriteStream } from "fs"
 import * as promises from "node:fs/promises"
+import path from "node:path"
 import * as readline from "readline"
 
 // tslint:disable-next-line:class-name
@@ -737,40 +738,25 @@ export interface StreamOptions {
 const options: StreamOptions = { flags: "a", encoding: "utf-8" }
 // tslint:disable-next-line:max-classes-per-file
 export class LogWriter {
-  private writer: WriteStream
-  suffix: string
+  protected writer: WriteStream
+  protected suffix: string
   constructor(filename: string, dir: string, opts?: BufferEncoding | StreamOptions, suffix?: string) {
     const o = opts ? opts : options
     this.suffix = suffix ? suffix : "\n"
     this.writer = createWriteStream(dir, filename, o)
-    this.writer.cork()
     this.write = this.write.bind(this)
-    this.flush = this.flush.bind(this)
-    this.uncork = this.uncork.bind(this)
     this.end = this.end.bind(this)
   }
-  write(data: string): void {
-    this.writer.write(data + this.suffix)
+  write(data: string): boolean {
+    return this.writer.write(data + this.suffix)
   }
-  flush(): void {
-    this.writer.uncork()
-  }
-  uncork(): void {
-    this.writer.uncork()
-  }
-  end(): void {
-    this.writer.end()
+  end(cb?: () => void): void {
+    this.writer.end(cb)
   }
 }
 export function createWriteStream(dir: string, filename: string, opts?: BufferEncoding | StreamOptions): WriteStream {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
-  if (dir.endsWith("/") || dir.endsWith("\\")) {
-    return fs.createWriteStream(dir + filename, opts)
-  } else {
-    return fs.createWriteStream(dir + "/" + filename, opts)
-  }
+  fs.mkdirSync(dir, { recursive: true })
+  return fs.createWriteStream(path.join(dir, filename), opts)
 }
 export function parseNum(s?: string): number | undefined {
   if (!s || s.length === 0) {
