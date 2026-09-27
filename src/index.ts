@@ -44,27 +44,7 @@ export function getDate(fileName: string): Date | undefined {
 export interface SimpleMap {
   [key: string]: string | number | boolean | Date
 }
-export type DataType =
-  | "ObjectId"
-  | "date"
-  | "datetime"
-  | "time"
-  | "boolean"
-  | "number"
-  | "integer"
-  | "string"
-  | "text"
-  | "object"
-  | "array"
-  | "binary"
-  | "primitives"
-  | "booleans"
-  | "numbers"
-  | "integers"
-  | "strings"
-  | "dates"
-  | "datetimes"
-  | "times"
+export type DataType = "ObjectId" | "date" | "datetime" | "time" | "boolean" | "number" | "integer" | "string" | "text" | "object" | "array" | "binary" | "primitives" | "booleans" | "numbers" | "integers" | "strings" | "dates" | "datetimes" | "times"
 
 export interface Attribute {
   type?: DataType
@@ -619,45 +599,25 @@ export function getPrefix(s: string, date: Date, offset?: number, separator?: st
     return s + dateToString(date, separator)
   }
 }
-export function dateToString(date: Date, separator?: string): string {
-  const year = date.getFullYear().toString()
-  let month: number | string = date.getMonth() + 1
-  let dt: number | string = date.getDate()
-
-  if (dt < 10) {
-    dt = "0" + dt.toString()
-  }
-  if (month < 10) {
-    month = "0" + month
-  }
-  if (separator !== undefined) {
-    return year + separator + month + separator + dt
-  } else {
-    return year + month + dt
-  }
+export function pad2(n: number): string {
+  return n < 10 ? "0" + n : n.toString()
 }
-export function timeToString(date: Date, separator?: string): string {
-  let hh: number | string = date.getHours()
-  let mm: number | string = date.getMinutes()
-  let ss: number | string = date.getSeconds()
-  if (hh < 10) {
-    hh = "0" + hh.toString()
-  }
-  if (ss < 10) {
-    ss = "0" + ss.toString()
-  }
-  if (mm < 10) {
-    mm = "0" + mm
-  }
-  if (separator !== undefined) {
-    return hh.toString() + separator + mm + separator + ss
-  } else {
-    return hh.toString() + mm + ss
-  }
+export function dateToString(date: Date, separator?: string): string {
+  const year = date.getFullYear()
+  const month = pad2(date.getMonth() + 1)
+  const day = pad2(date.getDate())
+  const s = separator != null ? separator : ""
+  return `${year}${s}${month}${s}${day}`
+}
+export function timeToString(d2: Date, separator?: string): string {
+  const hours = pad2(d2.getHours())
+  const minutes = pad2(d2.getMinutes())
+  const seconds = pad2(d2.getSeconds())
+  const s = separator != null ? separator : ""
+  return `${hours}${s}${minutes}${s}${seconds}`
 }
 export function toISOString(d: Date): string {
-  const s = `${dateToString(d, "-")}T${timeToString(d, ":")}.${getMilliseconds(d)}${getTimezone(d)}`
-  return s
+  return `${dateToString(d, "-")}T${timeToString(d, ":")}.${getMilliseconds(d)}${getTimezone(d)}`
 }
 export function getTimezone(d: Date): string {
   const t = d.getTimezoneOffset() / 60
@@ -735,15 +695,23 @@ export interface StreamOptions {
   start?: number | undefined
   highWaterMark?: number | undefined
 }
-const options: StreamOptions = { flags: "a", encoding: "utf-8" }
+export const options: StreamOptions = { flags: "a", encoding: "utf-8" }
+export function createWriteStream(dir: string, filename: string, opts?: BufferEncoding | StreamOptions): WriteStream {
+  const o = opts ? opts : options
+  fs.mkdirSync(dir, { recursive: true })
+  return fs.createWriteStream(path.join(dir, filename), o)
+}
+export function createLogWriter(dir: string, filename: string, opts?: BufferEncoding | StreamOptions, suffix?: string): LogWriter {
+  return new LogWriter(createWriteStream(dir, filename, opts), suffix)
+}
 // tslint:disable-next-line:max-classes-per-file
 export class LogWriter {
-  protected writer: WriteStream
   protected suffix: string
-  constructor(filename: string, dir: string, opts?: BufferEncoding | StreamOptions, suffix?: string) {
-    const o = opts ? opts : options
+  constructor(
+    protected writer: WriteStream,
+    suffix?: string,
+  ) {
     this.suffix = suffix ? suffix : "\n"
-    this.writer = createWriteStream(dir, filename, o)
     this.write = this.write.bind(this)
     this.end = this.end.bind(this)
   }
@@ -753,10 +721,6 @@ export class LogWriter {
   end(cb?: () => void): void {
     this.writer.end(cb)
   }
-}
-export function createWriteStream(dir: string, filename: string, opts?: BufferEncoding | StreamOptions): WriteStream {
-  fs.mkdirSync(dir, { recursive: true })
-  return fs.createWriteStream(path.join(dir, filename), opts)
 }
 export function parseNum(s?: string): number | undefined {
   if (!s || s.length === 0) {
